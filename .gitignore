@@ -4,8 +4,13 @@ __pycache__/
 *.pyc
 .ruff_cache/
 .pytest_cache/
-runs/          # per-run videos, frames, logs
-.cache/        # Tavily + LLM response cache
+# per-run videos, frames, logs
+runs/
+# Tavily + LLM response cache
+.cache/
+# robot models, fetched by scripts/fetch_menagerie.sh
+third_party/
 *.mp4
 !assets/*.mp4
 .DS_Store
+MUJOCO_LOG.TXT

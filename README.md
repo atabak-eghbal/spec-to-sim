@@ -45,9 +45,12 @@ See [docs/architecture.md](docs/architecture.md).
 
 ## Quickstart
 ```bash
-git clone https://github.com/<you>/spec-to-sim && cd spec-to-sim
+git clone https://github.com/atabak-eghbal/spec-to-sim && cd spec-to-sim
 cp .env.example .env        # fill in your keys
 uv sync
+./scripts/fetch_menagerie.sh                 # Franka Panda model (MuJoCo Menagerie, pinned commit)
+uv run python scripts/smoke_render.py        # sanity check -> runs/smoke/panda_smoke.mp4
+uv run python scripts/list_models.py         # sanity check Token Factory key + model IDs
 uv run python -m spec2sim.cli "a Franka arm stacks the red cube on the blue cube"
 uv run uvicorn app.main:app --reload   # UI at http://localhost:8000
 ```
@@ -56,4 +59,5 @@ uv run uvicorn app.main:app --reload   # UI at http://localhost:8000
 <!-- TODO: e.g. grasp attach fallback, Menagerie robots only -->
 
 ## License
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Robot models come from
+[MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie) (Apache-2.0), fetched at setup time.

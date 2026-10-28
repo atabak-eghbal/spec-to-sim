@@ -5,9 +5,9 @@ Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 ## Tue Oct 27 (evening) — Setup  ⏱ ~2h
 - [ ] Create accounts / API keys: Token Factory, Tavily, LangSmith, Nebius AI Cloud (CLI auth)
 - [ ] Create public GitHub repo `spec-to-sim`, push this scaffold, MIT license shows in About
-- [ ] `uv sync`, fill `.env`
+- [x] `uv sync` — [ ] fill `.env` keys
 - [ ] Smoke test: list Token Factory models, record exact Nemotron IDs
-- [ ] Smoke test: load Franka Panda from MuJoCo Menagerie, render 3 s MP4 headless
+- [x] Smoke test: load Franka Panda from MuJoCo Menagerie, render 3 s MP4 headless (`scripts/smoke_render.py`)
 
 ## Wed Oct 28 (morning) — Core loop on CLI  ⏱ ~5h
 - [ ] Pydantic schemas: TaskSpec, SceneObjects, MotionPlan, RunResult, Critique
