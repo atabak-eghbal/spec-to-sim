@@ -24,6 +24,16 @@ class IKError(RuntimeError):
     pass
 
 
+def _width_across(o, R: np.ndarray, axis: np.ndarray) -> float:
+    """Object extent along the finger-closing axis, using its real shape (not its bounding box)."""
+    if o.shape == "sphere":
+        return max(o.size)
+    if o.shape == "cylinder":
+        c = abs(float(R[:, 2] @ axis))  # cos(angle) between cylinder axis and finger axis
+        return max(o.size[:2]) * np.sqrt(max(0.0, 1 - c * c)) + o.size[2] * c
+    return float(np.sum(np.abs(R.T @ axis) * np.array(o.size)))
+
+
 def _rz(yaw: float) -> np.ndarray:
     c, s = np.cos(yaw), np.sin(yaw)
     return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
@@ -105,7 +115,7 @@ class Controller:
             d = np.linalg.norm(np.maximum(np.abs(local) - half, 0))
             if d > GRASP_REACH or d >= best_d:
                 continue
-            width = float(np.sum(np.abs(R.T @ finger_axis) * np.array(o.size)))
+            width = _width_across(o, R, finger_axis)
             if width > MAX_GRASP_WIDTH:
                 reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; "
                           f"Panda gripper opens only {MAX_GRASP_WIDTH * 100:.1f} cm")

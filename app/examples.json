@@ -1,14 +1,47 @@
 {
   "prompts": [
-    "Put the Rubik's cube on top of the soda can",
+    "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
+    "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
+    "Put the soda can to the left of the Rubik's cube and keep it upright",
     "Pick up the tennis ball and place it on the Rubik's cube",
     "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
-    "A Franka arm stacks the red cube on the blue cube"
+    "Clear the table: put the red, green and blue toy blocks into the storage bin"
   ],
   "featured": [
-    {"title": "Tennis ball rolls off, then repaired", "prompt": "Pick up the tennis ball and place it on the Rubik's cube", "run_id": "20261028-093443-14f0"},
-    {"title": "Cube placed on the floor, then repaired", "prompt": "A Franka arm stacks the red cube on the blue cube", "run_id": "20261028-093211-b9fb"},
-    {"title": "Rubik's cube on a soda can", "prompt": "Put the Rubik's cube on top of the soda can", "run_id": "20261028-093211-cf29"},
-    {"title": "Three-block tower", "prompt": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top", "run_id": "20261028-093304-b86e"}
+    {
+      "title": "Sorting fruit into bins",
+      "prompt": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
+      "run_id": "20261028-123520-54e9"
+    },
+    {
+      "title": "Tidy up: stack + sort",
+      "prompt": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
+      "run_id": "20261028-121726-779a"
+    },
+    {
+      "title": "Tennis ball rolls off, then repaired",
+      "prompt": "Pick up the tennis ball and place it on the Rubik's cube",
+      "run_id": "20261028-093443-14f0"
+    },
+    {
+      "title": "Soda can left of the cube",
+      "prompt": "Put the soda can to the left of the Rubik's cube and keep it upright",
+      "run_id": "20261028-123722-1721"
+    },
+    {
+      "title": "Cube placed on the floor, then repaired",
+      "prompt": "A Franka arm stacks the red cube on the blue cube",
+      "run_id": "20261028-093211-b9fb"
+    },
+    {
+      "title": "Rubik's cube on a soda can",
+      "prompt": "Put the Rubik's cube on top of the soda can",
+      "run_id": "20261028-093211-cf29"
+    },
+    {
+      "title": "Three-block tower",
+      "prompt": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
+      "run_id": "20261028-093304-b86e"
+    }
   ]
 }

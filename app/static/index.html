@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script type="importmap">{ "imports": { "three": "/static/vendor/three.module.min.js", "three/addons/": "/static/vendor/" } }</script>
+<script type="module" src="/static/viewer.js"></script>
 <style>
 /* Layout: control-room split. Left = the cascade as a live timeline, right = the simulation stage (sticky). */
 :root {
@@ -102,6 +104,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .crit { display: grid; gap: 0.35rem; }
 .crit dt { font: 500 0.66rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 0.3rem; }
 .crit dd { margin: 0; }
+.note { color: var(--muted); font-size: 0.85rem; padding: 0.3rem 0.9rem; }
 .errbox { background: var(--bad-soft); color: var(--bad); border-radius: 4px; padding: 0.7rem 0.9rem; font-size: 0.9rem; }
 
 /* stage */
@@ -110,6 +113,31 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .screen video { width: 100%; height: 100%; display: block; }
 .screen .idle { color: #9aabb8; font: 400 0.85rem/1.5 var(--mono); text-align: center; padding: 1rem; }
 .verdict { position: absolute; top: 0.6rem; left: 0.6rem; }
+.verdict { z-index: 2; }
+.screen > .viewer { position: absolute; inset: 0; }
+.viewer canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.viewer canvas:active { cursor: grabbing; }
+.v-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem;
+  background: linear-gradient(to top, rgba(10,15,20,0.85), rgba(10,15,20,0)); color: #e3eaef; }
+.v-bar button { background: rgba(255,255,255,0.12); border: 0; color: inherit; border-radius: 3px; padding: 0.25rem 0.55rem; font: 500 0.78rem/1 var(--mono); cursor: pointer; min-width: 2.2rem; }
+.v-bar button:hover { background: rgba(255,255,255,0.22); }
+.v-track { position: relative; flex: 1; display: grid; align-items: center; }
+.v-track input { width: 100%; margin: 0; accent-color: #7fb0e0; }
+.v-marks { position: absolute; left: 0; right: 0; top: -0.55rem; height: 0.45rem; pointer-events: none; }
+.v-marks i { position: absolute; width: 2px; height: 100%; transform: translateX(-1px); border-radius: 1px; background: #9aabb8; }
+.v-marks i.m-g { background: #6fc38f; } .v-marks i.m-r { background: #7fb0e0; } .v-marks i.m-x { background: #ec8a72; }
+.v-time { font-size: 0.75rem; min-width: 3.4rem; text-align: right; font-variant-numeric: tabular-nums; }
+.v-caption { position: absolute; left: 0.8rem; bottom: 3rem; font: 500 0.82rem/1.3 var(--mono); color: #fff; background: rgba(10,15,20,0.6);
+  padding: 0.3rem 0.55rem; border-radius: 3px; transition: opacity 0.3s; opacity: 0; pointer-events: none; max-width: calc(100% - 1.6rem); }
+.v-caption.v-hint { left: auto; right: 0.8rem; top: 0.6rem; bottom: auto; opacity: 0.8; color: #9aabb8; background: none; font-weight: 400; font-size: 0.72rem; }
+.v-goals { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.4s; opacity: 0; }
+.v-goal { position: absolute; left: 0; top: 0; font: 500 0.74rem/1 var(--mono); padding: 0.3rem 0.5rem; border-radius: 99px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+.v-goal.ok { background: #e1f1e6; color: #1f5c39; } .v-goal.bad { background: #f7e4df; color: #8f3420; }
+.modes { margin-left: auto; display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.modes button { border: 0; background: var(--sheet); padding: 0.3rem 0.65rem; font: 500 0.75rem/1 var(--mono); cursor: pointer; color: var(--muted); }
+.modes button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.tabs-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .tab { border: 1px solid var(--rule); background: var(--sheet); border-radius: 3px; padding: 0.35rem 0.7rem; font: 500 0.78rem/1 var(--mono); cursor: pointer; display: flex; gap: 0.4rem; align-items: center; }
 .tab[aria-selected="true"] { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
@@ -127,6 +155,10 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .mixlegend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font: 400 0.75rem/1.3 var(--mono); color: var(--muted); }
 .mixlegend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -0.05rem; }
 .trace { font-size: 0.85rem; }
+.export { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
+.export-btn { border: 1.5px solid var(--ink); color: var(--ink); border-radius: 4px; padding: 0.4rem 0.8rem; text-decoration: none;
+  font: 700 0.85rem/1 var(--display); font-stretch: 88%; white-space: nowrap; }
+.export-btn:hover { background: var(--ink); color: var(--paper); }
 </style>
 </head>
 <body>
@@ -164,9 +196,14 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
     </section>
 
     <aside class="stage" aria-label="Simulation">
-      <div class="tabs" id="tabs" role="tablist"></div>
-      <div class="screen" id="screen"><div class="idle">The simulation video for each attempt plays here.</div></div>
+      <div class="tabs-row"><div class="tabs" id="tabs" role="tablist"></div>
+        <div class="modes" id="modes" hidden><button type="button" data-mode="3d">3D</button><button type="button" data-mode="video">Video</button></div></div>
+      <div class="screen" id="screen"><div class="idle">Each attempt replays here in 3D. Drag to look around.</div></div>
       <div class="goals" id="goals"></div>
+      <div class="export" id="export" hidden>
+        <a id="export-link" class="export-btn" href="#" download>Export scene</a>
+        <span>MuJoCo scene, success checks and motion plan as a zip, ready to test your own robot policy.</span>
+      </div>
       <div class="totals">
         <div class="tot"><span class="label">Result</span><b id="t-result">—</b></div>
         <div class="tot"><span class="label">Attempts</span><b id="t-att">—</b></div>
@@ -200,7 +237,7 @@ reset();
 /* ---------- event intake ---------- */
 function onEvent(ev) {
   state.events.push(ev);
-  if (ev.type === "start") { state.start = ev.ts; state.trace = ev.trace_url; }
+  if (ev.type === "start") { state.start = ev.ts; state.trace = ev.trace_url; state.runId = ev.run_id; }
   if (ev.type === "queued") state.queued = ev.message;
   if (ev.type === "step") {
     const key = ev.step + "#" + (ev.attempt || 0);
@@ -213,6 +250,7 @@ function onEvent(ev) {
     }
   }
   if (ev.type === "done") { state.done = ev; state.end = ev.ts; }
+  if (ev.type === "note") (state.notes = state.notes || []).push(ev.message);
   if (ev.type === "error") { state.error = ev.message; state.end = ev.ts; }
 }
 
@@ -261,6 +299,40 @@ function stepBody(s) {
   return "";
 }
 
+// 3D replay (viewer.js) when the attempt has one, otherwise the MP4. One viewer is reused.
+let viewer = null, viewMode = "3d";
+function renderScreen(r) {
+  const screen = $("screen");
+  const has3d = r && r.viz_path && window.SimViewer;
+  const mode = has3d && (viewMode === "3d" || !r.video_path) ? "3d" : r && r.video_path ? "video" : null;
+  const modes = $("modes");
+  modes.hidden = !(r && r.viz_path && r.video_path && window.SimViewer);
+  for (const b of modes.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  const verdict = r ? `<span class="verdict pill ${r.success ? "p-ok" : "p-bad"}">attempt ${state.selected}: ${r.success ? "success" : "failed"}</span>` : "";
+  if (mode === "3d") {
+    let host = screen.querySelector(".viewer");
+    if (!host) {
+      screen.innerHTML = "";
+      host = document.createElement("div");
+      screen.appendChild(host);
+      viewer = new window.SimViewer(host);
+    }
+    screen.querySelector(".verdict")?.remove();
+    screen.insertAdjacentHTML("beforeend", verdict);
+    viewer.load("/media/" + r.viz_path);
+  } else if (mode === "video") {
+    const src = "/media/" + r.video_path;
+    const v = screen.querySelector("video");
+    if (!v || v.getAttribute("src") !== src) {
+      if (viewer) { viewer.dispose(); viewer = null; }
+      screen.innerHTML = `<video src="${esc(src)}" autoplay muted loop playsinline controls></video>${verdict}`;
+    }
+  } else if (r && r.error) {
+    if (viewer) { viewer.dispose(); viewer = null; }
+    screen.innerHTML = `<div class="idle">Nothing to replay: ${esc(r.error)}</div>`;
+  }
+}
+
 function renderTimeline() {
   const tl = $("timeline");
   if (!state.steps.length && !state.error && !state.queued) return;
@@ -285,6 +357,8 @@ function renderTimeline() {
     html += `<div class="step ${cls}"><div class="step-head">${status}<span class="step-name">${esc(name)}</span>${att}${badges}${esc8}<span class="step-meta">${meta}</span></div>
       <div class="step-body">${running ? `<p style="color:var(--muted)">${runningText(s)}</p>` : stepBody(s)}</div></div>`;
   }
+  for (const n of state.notes || []) html += `<div class="note">${esc(n)}</div>`;
+  if (state.done && state.done.infeasible) html += `<div class="errbox"><strong>Physically infeasible.</strong> ${esc(state.done.infeasible)} Stopped before building, so no credits were spent on repairs.</div>`;
   if (state.error) html += `<div class="errbox">Run stopped: ${esc(state.error)}</div>`;
   tl.innerHTML = html;
 }
@@ -307,21 +381,13 @@ function renderStage() {
     return `<button class="tab" role="tab" aria-selected="${n === state.selected}" data-att="${n}"><span class="dot ${ok ? "ok" : "bad"}"></span>Attempt ${n}</button>`;
   }).join("");
   const r = state.attempts[state.selected];
-  const screen = $("screen");
-  if (r && r.video_path) {
-    const src = "/media/" + r.video_path;
-    const v = screen.querySelector("video");
-    if (!v || v.getAttribute("src") !== src) {
-      screen.innerHTML = `<video src="${esc(src)}" autoplay muted loop playsinline controls></video>
-        <span class="verdict pill ${r.success ? "p-ok" : "p-bad"}">attempt ${state.selected}: ${r.success ? "success" : "failed"}</span>`;
-    }
-  } else if (r && r.error) {
-    screen.innerHTML = `<div class="idle">No video: ${esc(r.error)}</div>`;
-  }
+  renderScreen(r);
+  $("export").hidden = !(r && state.runId && !r.error);
+  if (r && state.runId) $("export-link").href = `/api/runs/${encodeURIComponent(state.runId)}/export?attempt=${state.selected}`;
   $("goals").innerHTML = r ? r.goals.map((g) => `<div class="goal"><span class="pill ${g.ok ? "p-ok" : "p-bad"}">${g.ok ? "pass" : "fail"}</span><span>${esc(g.detail)}</span></div>`).join("") : "";
 
   const d = state.done;
-  $("t-result").textContent = d ? (d.success ? "Success" : "Failed") : state.error ? "Error" : state.start ? "Running" : "—";
+  $("t-result").textContent = d ? (d.success ? "Success" : d.infeasible ? "Infeasible" : "Failed") : state.error ? "Error" : state.start ? "Running" : "—";
   $("t-result").style.color = d ? (d.success ? "var(--ok)" : "var(--bad)") : "";
   $("t-att").textContent = nums.length ? String(nums.length) : "—";
   $("t-cost").textContent = state.start ? fmt$(state.cost) : "—";
@@ -344,6 +410,11 @@ function renderStage() {
 
 function render() { renderTimeline(); renderStage(); }
 
+$("modes").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) { viewMode = b.dataset.mode; renderStage(); }
+});
+window.addEventListener("simviewer-ready", () => { if (state.selected) renderStage(); });
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-att]");
   if (b) { state.selected = Number(b.dataset.att); renderStage(); }
@@ -356,12 +427,19 @@ function follow(runId) {
   if (source) source.close();
   clearInterval(ticker);
   reset();
+  if (viewer) { viewer.dispose(); viewer = null; }
   $("screen").innerHTML = `<div class="idle">Waiting for the first attempt…</div>`;
   $("goals").innerHTML = "";
   setBusy(true);
   source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
   source.onmessage = (m) => { onEvent(JSON.parse(m.data)); render(); };
-  source.addEventListener("end", () => { source.close(); clearInterval(ticker); setBusy(false); render(); });
+  source.addEventListener("end", () => {
+    source.close(); clearInterval(ticker); setBusy(false);
+    // ?attempt=N opens a recorded run on that attempt (e.g. the failed one before a repair).
+    const want = Number(new URL(location).searchParams.get("attempt"));
+    if (want && state.attempts[want]) state.selected = want;
+    render();
+  });
   source.onerror = () => { source.close(); clearInterval(ticker); setBusy(false); };
   ticker = setInterval(render, 250);
   const url = new URL(location); url.searchParams.set("run", runId); history.replaceState(null, "", url);

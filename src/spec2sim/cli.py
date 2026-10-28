@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from spec2sim.loop import run_task
+from spec2sim.loop import RUNS, run_task
 
 
 def _fmt_stats(s: dict | None) -> str:
@@ -24,8 +24,15 @@ def main() -> None:
     ap.add_argument("-v", "--verbose", action="store_true", help="print full step outputs")
     args = ap.parse_args()
 
+    log = None
     for ev in run_task(args.prompt, max_iterations=args.max_iterations):
         t = ev["type"]
+        if t == "start":  # same events.jsonl the web app writes, so CLI runs replay in the UI
+            (RUNS / ev["run_id"]).mkdir(parents=True, exist_ok=True)
+            log = (RUNS / ev["run_id"] / "events.jsonl").open("w")
+        if log:
+            log.write(json.dumps(ev) + "\n")
+            log.flush()
         if t == "start":
             print(f"run {ev['run_id']}  trace: {ev['trace_url']}")
         elif t == "step" and ev["status"] == "running":
@@ -56,7 +63,11 @@ def main() -> None:
                 print(f"  [{d['category']}] {d['what_happened']}\n  cause: {d['root_cause']}\n  fix: {d['suggested_fix']}")
             if args.verbose:
                 print(json.dumps(d, indent=1)[:3000])
+        elif t == "note":
+            print(f"  note: {ev['message']}")
         elif t == "done":
+            if ev.get("infeasible"):
+                print(f"\n⛔ physically infeasible: {ev['infeasible']}")
             print(f"\n{'✅' if ev['success'] else '❌'} done in {ev['attempts']} attempt(s), "
                   f"LLM cost ${ev['total_cost_usd']:.4f}")
 

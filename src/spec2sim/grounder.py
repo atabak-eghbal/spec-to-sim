@@ -21,6 +21,10 @@ from tavily import TavilyClient
 from spec2sim import config
 from spec2sim.llm import CallStat, chat_json
 from spec2sim.schemas import GroundedFacts, ObjectFact, Source, TaskSpec
+from spec2sim.sim.scene import BIN_MAX_SIZE
+
+BIN_TARGET_HEIGHT = 0.12  # walls low enough for the arm to reach over comfortably
+BIN_MIN_WIDTH = 0.15  # room for a few objects plus the fingers
 
 CACHE = Path(__file__).resolve().parents[2] / ".cache/tavily"
 MAX_SEARCHES = 3
@@ -30,11 +34,15 @@ For EACH object listed, fill in, in this order:
 - quote: the exact phrase from the search results that states its size and/or weight (copy it),
   or "" if the results do not mention this object's numbers
 - source_url: the URL of the result that quote came from, or null
-- size_mm: full size in MILLIMETERS as [x, y, z]; for a cylinder or sphere [diameter, diameter, height]
+- size_mm: full size in MILLIMETERS as [x, y, z]; for a cylinder or sphere [diameter, diameter, height];
+  for a bin (open container) its outer [length, width, height]
 - mass_g: mass in GRAMS
 - note: under 12 words, e.g. "from quote" or "estimate: typical wooden block"
+Only use a quote about the SAME kind of thing: a result about an Apple iPhone or AirPods is not
+about an apple fruit; a full-size curbside cart is not a desktop bin. If no result matches, estimate.
 Copy numbers from the quote when it has them; convert inches/ounces to mm/g if needed.
 Assume each object is in its normal everyday state (a drink can is full, a mug is empty).
+If a source lists several grades or sizes, use the typical/median one, not the largest.
 If there is no quote, give a typical real-world value and say "estimate" in the note.
 Return JSON only."""
 
@@ -52,24 +60,55 @@ class _Extraction(BaseModel):
     facts: list[_Extracted]
 
 
+def _volume(size: tuple[float, float, float], shape: str) -> float:
+    v = size[0] * size[1] * size[2]
+    return v * (math.pi / 4 if shape == "cylinder" else math.pi / 6 if shape == "sphere" else 1)
+
+
 # Density bounds (kg/m^3) for the sanity check; outside these the mass is replaced by an estimate.
 _MIN_DENSITY, _MAX_DENSITY, _DEFAULT_DENSITY = 150, 9000, 900
 
 
-def _to_fact(e: _Extracted, shape: str) -> ObjectFact:
-    """Convert mm/g to SI and sanity-check the mass against the object's volume."""
+PRIOR_TOLERANCE = 2.0  # web size may differ from the Planner's own estimate by at most this factor
+
+
+def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | None = None) -> ObjectFact:
+    """Convert mm/g to SI and sanity-check size against the Planner's prior and mass against volume."""
     size = tuple(v / 1000 for v in e.size_mm)
     mass = e.mass_g / 1000
-    vol = size[0] * size[1] * size[2]
-    if shape == "cylinder":
-        vol *= math.pi / 4
-    elif shape == "sphere":
-        vol *= math.pi / 6
+    if shape in ("cylinder", "sphere"):
+        # Nano sometimes scrambles the order, e.g. a can as [122, 66, 122]. A round object's
+        # diameter is its smaller horizontal value (spheres: all three equal the diameter).
+        d = min(size[0], size[1])
+        size = (d, d, d) if shape == "sphere" else (d, d, size[2])
+    if prior_cm and all(v > 0 for v in prior_cm):
+        prior = tuple(v / 100 for v in prior_cm)
+        ratio = max(max(a / b, b / a) for a, b in zip(sorted(size), sorted(prior), strict=True))
+        if ratio > PRIOR_TOLERANCE:
+            web_cm = [round(v * 100, 1) for v in size]
+            size = prior
+            mass = mass if _MIN_DENSITY <= mass / max(_volume(size, shape), 1e-9) <= _MAX_DENSITY else 0
+            e = e.model_copy(update={"quote": "", "note": f"web size {web_cm} cm rejected (expected ~{list(prior_cm)} cm)"})
+    vol = _volume(size, shape)
     note = e.note
+    if shape == "bin":  # hollow and fixed in place: mass does not matter, volume is mostly air
+        # Real storage bins are floor-sized. Shrink the footprint to fit the workspace (keeping its
+        # proportions) and cap the walls at a height the arm can reach over.
+        k = min(1.0, BIN_MAX_SIZE / max(size[:2]))
+        scaled = (round(size[0] * k, 4), round(size[1] * k, 4), round(min(size[2] * k, BIN_TARGET_HEIGHT), 4))
+        if min(scaled[:2]) < BIN_MIN_WIDTH:  # a pencil-cup "bin" can't take several objects
+            up = BIN_MIN_WIDTH / min(scaled[:2])
+            scaled = (round(min(scaled[0] * up, BIN_MAX_SIZE), 4), round(min(scaled[1] * up, BIN_MAX_SIZE), 4), scaled[2])
+        if scaled != tuple(round(v, 4) for v in size):
+            note = f"resized to tabletop size from real {[round(v * 100) for v in size]} cm"
+            size = scaled
+        return ObjectFact(name=e.name, size=size, mass=min(max(mass, 0.05), 2.0),
+                          source_url=e.source_url if e.quote.strip() else None, note=note)
     density = mass / vol if vol > 0 else 0
     if vol > 0 and not _MIN_DENSITY <= density <= _MAX_DENSITY:
         mass = round(vol * _DEFAULT_DENSITY, 4)
-        note = f"mass corrected: {e.mass_g:g} g implies {density:.0f} kg/m3"
+        fix = f"mass corrected: {e.mass_g:g} g implies {density:.0f} kg/m3"
+        note = f"{note}; {fix}" if note.startswith("web size") else fix
     return ObjectFact(name=e.name, size=size, mass=mass,
                       source_url=e.source_url if e.quote.strip() else None, note=note)
 
@@ -112,7 +151,8 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     ex, stats = chat_json("grounder", config.NANO, SYSTEM, user, _Extraction, max_tokens=3000,
                           temperature=0.1, thinking=False)
     shapes = {o.name: o.shape for o in task.objects}
-    facts = GroundedFacts(facts=[_to_fact(e, shapes.get(e.name, "box")) for e in ex.facts])
+    priors = {o.name: o.approx_size_cm for o in task.objects}
+    facts = GroundedFacts(facts=[_to_fact(e, shapes.get(e.name, "box"), priors.get(e.name)) for e in ex.facts])
     # Keep the sources list short and unique for the UI.
     seen, uniq = set(), []
     for s in sources:

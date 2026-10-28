@@ -35,3 +35,6 @@ ULTRA = ModelInfo(os.getenv("MODEL_ULTRA", "nvidia/Nemotron-3-Ultra-550b-a55b"),
 
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "4"))
 DEV_SPEND_LIMIT_USD = float(os.getenv("DEV_SPEND_LIMIT_USD", "20"))
+# Public demo guard: Token Factory spend per UTC day. When reached, new runs are refused and the
+# UI points visitors to the recorded runs (which replay for free).
+DAILY_SPEND_LIMIT_USD = float(os.getenv("DAILY_SPEND_LIMIT_USD", "5"))

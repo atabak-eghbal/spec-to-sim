@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 # per-run videos, frames, logs
 runs/
+# batch-eval raw outputs (summaries are copied to docs/eval.md)
+eval/
 # Tavily + LLM response cache
 .cache/
 # robot models, fetched by scripts/fetch_menagerie.sh
@@ -15,3 +17,6 @@ third_party/
 !app/featured/**/*.mp4
 .DS_Store
 MUJOCO_LOG.TXT
+
+# generated robot meshes for the browser replay
+app/.viz/

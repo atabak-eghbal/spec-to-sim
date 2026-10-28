@@ -1,0 +1,15 @@
+.env
+.venv
+.git
+.cache
+runs
+eval
+third_party
+docs
+assets
+tests
+**/__pycache__
+*.pyc
+.ruff_cache
+.pytest_cache
+app/.viz

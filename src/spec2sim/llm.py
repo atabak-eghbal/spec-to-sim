@@ -5,7 +5,8 @@
 - `chat_json` asks for JSON constrained to a Pydantic schema (`response_format=json_schema`),
   validates it, and retries once with the validation error if needed.
 - Every call returns a `CallStat` (model, latency, tokens, $) that the UI shows per step, and is
-  appended to `.cache/spend.jsonl`; calls stop once dev spend passes DEV_SPEND_LIMIT_USD.
+  appended to `.cache/spend.jsonl`; calls stop once dev spend passes DEV_SPEND_LIMIT_USD or today's spend
+  passes DAILY_SPEND_LIMIT_USD (the public-demo guard).
 """
 from __future__ import annotations
 
@@ -25,9 +26,18 @@ T = TypeVar("T", bound=BaseModel)
 ROOT = Path(__file__).resolve().parents[2]
 SPEND_LOG = ROOT / ".cache/spend.jsonl"
 
-_client = wrap_openai(
-    OpenAI(base_url=config.NEBIUS_BASE_URL, api_key=config.NEBIUS_API_KEY, timeout=180, max_retries=2)
-)
+_client_instance = None
+
+
+def _client():
+    """Created on first use, so the web app starts (and replays recorded runs) without API keys."""
+    global _client_instance
+    if _client_instance is None:
+        if not config.NEBIUS_API_KEY:
+            raise LLMError("NEBIUS_API_KEY is not set, so live runs are unavailable")
+        _client_instance = wrap_openai(OpenAI(base_url=config.NEBIUS_BASE_URL, api_key=config.NEBIUS_API_KEY,
+                                              timeout=180, max_retries=2))
+    return _client_instance
 
 
 class BudgetError(RuntimeError):
@@ -48,16 +58,55 @@ class CallStat(BaseModel):
     cost_usd: float
 
 
-def total_spend() -> float:
+def _spend_rows() -> list[dict]:
     if not SPEND_LOG.exists():
-        return 0.0
-    return sum(json.loads(line)["cost_usd"] for line in SPEND_LOG.read_text().splitlines() if line)
+        return []
+    return [json.loads(line) for line in SPEND_LOG.read_text().splitlines() if line]
+
+
+def total_spend() -> float:
+    return sum(r["cost_usd"] for r in _spend_rows())
+
+
+def spend_today() -> float:
+    """Spend since 00:00 UTC (rows logged before timestamps existed are not counted)."""
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    return sum(r["cost_usd"] for r in _spend_rows()
+               if time.strftime("%Y-%m-%d", time.gmtime(r.get("ts", 0))) == day)
+
+
+def check_budget() -> None:
+    """Raise BudgetError if either the total dev cap or today's demo cap is reached."""
+    spent = total_spend()
+    if spent > config.DEV_SPEND_LIMIT_USD:
+        raise BudgetError(f"spend ${spent:.2f} exceeds limit ${config.DEV_SPEND_LIMIT_USD:.2f}")
+    today = spend_today()
+    if today >= config.DAILY_SPEND_LIMIT_USD:
+        raise BudgetError(f"today's model budget (${config.DAILY_SPEND_LIMIT_USD:.2f}) is used up")
 
 
 def _image_part(path: str) -> dict:
     mime = "image/png" if path.endswith(".png") else "image/jpeg"
     b64 = base64.b64encode(Path(path).read_bytes()).decode()
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+
+
+def _json_part(text: str) -> str:
+    """The JSON object in a reply. Ultra sometimes writes its reasoning before the JSON even with a
+    strict response_format; take the last top-level object that parses."""
+    text = text.strip()
+    if text.startswith("{"):
+        return text
+    dec, found, i = json.JSONDecoder(), None, text.find("{")
+    while i != -1:
+        try:
+            obj, end = dec.raw_decode(text, i)
+            if isinstance(obj, dict):
+                found = text[i:end]
+            i = text.find("{", end)
+        except ValueError:
+            i = text.find("{", i + 1)
+    return found or text
 
 
 def chat_json(
@@ -76,9 +125,7 @@ def chat_json(
     thinking=False turns off Nemotron's reasoning trace (chat_template_kwargs.enable_thinking):
     on Super VL this cuts a critique from ~25 s (and sometimes an exhausted token budget) to ~2 s.
     """
-    spent = total_spend()
-    if spent > config.DEV_SPEND_LIMIT_USD:
-        raise BudgetError(f"spend ${spent:.2f} exceeds limit ${config.DEV_SPEND_LIMIT_USD:.2f}")
+    check_budget()
 
     content: str | list = user
     if images:
@@ -90,7 +137,7 @@ def chat_json(
     stats: list[CallStat] = []
     for attempt in range(2):
         t0 = time.time()
-        r = _client.chat.completions.create(
+        r = _client().chat.completions.create(
             model=model.id, messages=messages, response_format=fmt,
             max_tokens=max_tokens, temperature=temperature,
             extra_body=None if thinking else {"chat_template_kwargs": {"enable_thinking": False}},
@@ -104,7 +151,7 @@ def chat_json(
         stats.append(stat)
         SPEND_LOG.parent.mkdir(parents=True, exist_ok=True)
         with SPEND_LOG.open("a") as f:
-            f.write(stat.model_dump_json() + "\n")
+            f.write(json.dumps({**stat.model_dump(), "ts": round(time.time(), 1)}) + "\n")
 
         text = r.choices[0].message.content or ""
         if not text.strip() and r.choices[0].finish_reason == "length":
@@ -114,7 +161,7 @@ def chat_json(
             thinking = False
             continue
         try:
-            return out.model_validate_json(text), stats
+            return out.model_validate_json(_json_part(text)), stats
         except ValidationError as e:
             if attempt == 1:
                 raise LLMError(f"{step}: invalid {out.__name__} after retry: {e}") from e

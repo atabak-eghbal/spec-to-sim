@@ -40,6 +40,11 @@ Deadline: **Fri Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 - [ ] Fill Devpost, double-check every required field, submit by 08:00 PT
 - [ ] Leave endpoint running (judging Dec 1–15) — see cost note in docs/research/02-nebius-platform.md
 
+## End-of-project decisions (discuss with Austin before submitting)
+- [ ] **Team name** that sounds like an enterprise (cf. Cosmos Cookoff winner "Team Zenith")
+- [ ] **Free hosting** for the long-lived demo URL (until Dec 15): Hugging Face Spaces or Cloud Run; Nebius keeps the eval Job
+- [ ] **Lower the Token Factory daily cap** for judging (now `DAILY_SPEND_LIMIT_USD=5`)
+
 ## Cut list (if behind schedule, cut in this order)
 1. Batch-eval Serverless Job → run eval locally, keep Job for one small run
 2. UR5e second robot

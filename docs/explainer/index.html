@@ -156,14 +156,15 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
 <div class="wrap">
 
 <header>
-  <span class="label">Project logbook · updated Wed Oct 28, 2026, afternoon session</span>
+  <span class="label">Project logbook · updated Wed Oct 28, 2026, evening session</span>
   <h1>Spec-to-Sim</h1>
   <p class="lede">You type a robot task in plain English. A chain of NVIDIA Nemotron models turns it into a MuJoCo simulation, runs it, watches the video, and repairs the plan until the task succeeds. This page explains how it works, what has been built, and why each decision was made.</p>
   <div class="status">
     <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
     <div><span class="label">Target submit</span><b>08:00 PT</b></div>
-    <div><span class="label">Model spend</span><b>$0.11 / $20 cap</b></div>
-    <div><span class="label">Tests</span><b>6 / 6 passing</b></div>
+    <div><span class="label">Model spend</span><b>$1.01 / $20 cap</b></div>
+    <div><span class="label">Eval</span><b>8 / 8 tasks pass</b></div>
+    <div><span class="label">Tests</span><b>17 / 17 passing</b></div>
     <div><span class="label">Repo</span><b>private until submit</b></div>
   </div>
 </header>
@@ -220,12 +221,22 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
 <!-- ============ EVIDENCE ============ -->
 <section>
   <span class="label">The product</span>
-  <h2>The web app, replaying a natural repair</h2>
+  <h2>The web app: every attempt replays in 3D</h2>
   <figure>
-    <img src="img/ui_repair.jpg" alt="Spec-to-Sim web app: a timeline of steps on the left (Planner, Grounder, Builder, a failed Simulator attempt, Critic, Repair) and the simulation video on the right with attempt tabs, a success result, model cost and a model-time bar">
-    <figcaption><b>Run it yourself:</b> <code>uv run uvicorn app.main:app</code>, then open <code>localhost:8000</code>. Left: each step as it runs, with its model, time, tokens and cost. Right: the video for each attempt, the goal check, total cost, and where the time went. Here the tennis ball rolled off on attempt 1. Nobody forced that failure. The Critic worked out from the ball's radius that the release was wrong, and Super's repair succeeded on attempt 2.</figcaption>
+    <img src="img/ui_3d.jpg" alt="Spec-to-Sim web app: the step timeline on the left; on the right a 3D scene of the Franka arm on a lab bench with a basket and a recycling bin, green labels reading apple inside fruit_basket, lime inside fruit_basket and soda_can inside recycling_bin, a timeline scrubber, an Export scene button, result Success, 2 attempts, $0.017">
+    <figcaption><b>Run it yourself:</b> <code>uv run uvicorn app.main:app</code>, then open <code>localhost:8000</code>. Left: each step as it runs, with its model, time, tokens and cost. Right: the attempt in 3D (drag to orbit), a timeline with grasp and release markers, and the code's goal checks drawn over the objects at the end. <b>Export scene</b> downloads the scene, the success checks and the plan as a zip.</figcaption>
   </figure>
-  <p class="col">Four recorded runs ship with the app (<code>app/featured/</code>) and replay instantly at no cost. Judges see a working example even if a model API is slow that day.</p>
+  <div class="pair">
+    <figure>
+      <img src="img/viewer_fail.jpg" alt="3D replay of a failed attempt: a tennis ball lies beside a dark cube, with a red label reading tennis_ball on rubiks_cube, 9.3 cm off">
+      <figcaption><b>A failed attempt, as the code sees it.</b> The ball was released 1.6 cm above the cube and rolled off. The red label is the measured result, not a model's opinion. Open it with <code>?run=20261028-093443-14f0&amp;attempt=1</code>.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/viewer_goals.jpg" alt="Two 3D replays with green labels: apple, lime and soda can inside their bins; red cube on blue cube">
+      <figcaption><b>Final states with their checks.</b> Labels appear when the replay reaches the end, one per goal, and they never overlap.</figcaption>
+    </figure>
+  </div>
+  <p class="col">Seven recorded runs ship with the app (<code>app/featured/</code>), including fruit sorting and a mixed stack-and-sort, and replay instantly at no cost. Judges see a working example even if a model API is slow that day.</p>
 </section>
 
 <section>
@@ -257,7 +268,32 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <figcaption><b>Rubik's cube on soda can.</b> Sizes from the web: cube 5.6 cm, can 6.6 cm wide and 12.3 cm tall.</figcaption>
     </figure>
   </div>
+  <figure>
+    <img src="img/fruit_sort.jpg" alt="Eight frames: the arm drops a red apple and a green lime into a brown basket, then a soda can into a blue recycling bin">
+    <figcaption><b>Harder task: sorting into bins.</b> “Put the apple and the lime into the fruit basket, and the soda can into the recycling bin.” Fruit sizes come from agriculture pages found by Tavily. Bins are open-top containers, and success is RoboLab's test: is the object's center inside the bin's cavity? Passed on the first try for $0.009.</figcaption>
+  </figure>
+  <figure>
+    <img src="img/tidy_up.jpg" alt="Eight frames: the arm stacks a red block on a blue block, then puts a green block and a yellow tennis ball into a grey tray">
+    <figcaption><b>Harder task: stacking and sorting in one plan.</b> “Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray.” Three goals of two kinds, 24 actions. Passed on the first try for $0.010.</figcaption>
+  </figure>
   <p class="col" style="font-size:0.9rem;color:var(--muted)">Full videos are in <code>runs/</code> on your machine. Each attempt folder has <code>run.mp4</code>, the contact sheet and 8 single frames.</p>
+</section>
+
+<section>
+  <span class="label">Batch evaluation</span>
+  <h2>8 tasks, from easy to hard: 4 passed, then 8</h2>
+  <p class="col"><code>scripts/eval.py</code> runs a fixed suite of 8 prompts through the whole pipeline and counts how many pass. Only the code checks decide pass or fail. Each round's failures were traced and fixed in code, not by retrying prompts until they passed. The same script will run on Nebius as a Serverless Job, with 3 repeats per prompt.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Round</th><th>Passed</th><th>First try</th><th>Model cost</th><th>What the failures taught us</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td class="num">4 / 8</td><td class="num">3 / 8</td><td class="num">$0.20</td><td>A goal placed inside the robot's base. IK failing inside the stated workspace. Web sizes that were nonsense (D25, D26).</td></tr>
+        <tr><td>2 (hard only)</td><td class="num">2 / 3</td><td class="num">2 / 3</td><td class="num">$0.06</td><td>One scene problem found per attempt, wasting attempts (D27).</td></tr>
+        <tr><td>3</td><td class="num"><b>8 / 8</b></td><td class="num">3 / 8</td><td class="num">$0.17</td><td>First-try misses: an invented “table” object (2 runs), a 10 cm bin for three blocks, the tennis ball rolling off. The first two are now fixed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col" style="font-size:0.9rem;color:var(--muted)">Per-prompt numbers are in <code>docs/eval.md</code>. One repeat per prompt is a small sample. The same prompt can pass first time in one run and need 3 attempts in the next.</p>
 </section>
 
 <!-- ============ DECISIONS ============ -->
@@ -408,6 +444,114 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       </dl></div>
     </details>
 
+    <details class="dec">
+      <summary><span class="dec-id">D18</span><span class="dec-title">One CPU-only container; shadows off when rendering in software</span><span class="dec-area">deploy · speed</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The web app and simulator ship as one Docker image with no GPU. MuJoCo renders through OSMesa (software OpenGL). In the container, shadows and floor reflections are off (<code>SPEC2SIM_SHADOWS=0</code>). On the Mac and on a GPU they stay on.</dd>
+        <dt>Why</dt><dd>Measured in the container: one frame took 183 ms with shadows and 38 ms without, at any resolution and shadow-map size. A 7 s clip went from 53 s to 12 s (16 s on 2 CPUs). A GPU endpoint would cost many times more for the same demo.</dd>
+        <dt>Trade-off</dt><dd>Live runs on the server look flatter than the recorded ones. The 4 featured runs keep their shadows.</dd>
+        <dt>Also found</dt><dd>The amd64 image can't be smoke-tested on an Apple-silicon Mac. MuJoCo's x86 build needs AVX instructions, which Docker's emulation lacks, so the process is killed instantly (exit 137). The same Dockerfile built natively for arm64 runs the full test scene.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D19</span><span class="dec-title">Video frames go straight to disk</span><span class="dec-area">memory</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Each frame is sent to the MP4 encoder as it is rendered. Only small thumbnails (10 per second, half size) stay in memory to build the Critic's grid.</dd>
+        <dt>Why</dt><dd>Multi-object tasks need up to 30 s of simulation. Keeping every full frame would take over 1 GB per run, and the server runs two at a time.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D20</span><span class="dec-title">Goal types borrowed from NVIDIA's RoboLab, plus bins</span><span class="dec-area">harder tasks</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>New goal types: <code>inside</code> (object in a bin), <code>left_of</code>, <code>right_of</code>, <code>in_front_of</code>, <code>behind</code> and <code>upright</code>. New object shape: <code>bin</code>, an open-top container (floor plus four walls) fixed in place. Up to 6 objects and 30 s per task.</dd>
+        <dt>Why</dt><dd>NVIDIA's RoboLab benchmark (built on Isaac Lab, RSS 2026) defines task success with the same kind of predicates: <code>object_in_container</code>, <code>object_left_of</code> and so on. Our <code>inside</code> uses RoboLab's test: the object's center must lie inside the container's cavity, measured in the container's own frame. Using the same vocabulary makes our tasks comparable to theirs and lets us show sorting and tidying, not just stacking.</dd>
+        <dt>Result</dt><dd>“Clear the table: put the red, green and blue blocks into the storage bin” passed on the first try for $0.007. Fruit sorting (apple and lime into a basket, soda can into a recycling bin) also passed first try. Sources: <code>docs/research/07-nvidia-physical-ai.md</code>.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D21</span><span class="dec-title">Bins are scaled to tabletop size in code, not by the model</span><span class="dec-area">reliability</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>When the Grounder finds a real container bigger than the workspace allows, code shrinks it to at most 30 cm wide and 12 cm tall, keeps its proportions, and notes the original size. A bin's whole footprint, not just its center, must be inside the reachable area.</dd>
+        <dt>Why</dt><dd>The web gave real sizes: a 97 cm curbside recycling cart, a 38 cm basket. Walls that tall blocked the arm. Prompting the Builder to shrink them worked only sometimes, and two attempts were wasted on it. Then a bin centered at the edge of the workspace put its far half where the arm cannot reach.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D22</span><span class="dec-title">Say “impossible” before spending money on repairs</span><span class="dec-area">honesty · cost</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>After grounding, code checks every object that has to move against the gripper's 7.8 cm opening. If one is too wide, the run stops with a clear “physically infeasible” message before the Builder runs.</dd>
+        <dt>Why</dt><dd>One run grounded a real orange at 8 cm. The Critic correctly said no plan could ever grasp it. The loop still went on to escalate to Ultra, which then crashed. A robotics engineer would rather hear “your gripper is too small” in 10 seconds.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D23</span><span class="dec-title">Guards against invented names and faked results</span><span class="dec-area">trust</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>(1) The task spec is rejected unless every goal names a declared object and every <code>inside</code> goal points at a bin. The error goes back to the model for one retry. (2) If a placement goal already holds before the robot moves, the attempt fails with “objects must start away from their goal”.</dd>
+        <dt>Why</dt><dd>(1) The Planner once wrote a goal target of <code>"target': "</code>, a broken fragment of JSON. NVIDIA's Isaac Lab-Arena lists invented names as its top failure mode with Nemotron Ultra too. (2) A repair once tried to “solve” the fruit task by starting the orange inside the basket.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D24</span><span class="dec-title">Recover JSON from Ultra, and fall back to Super</span><span class="dec-area">reliability</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>If a reply has prose before the JSON, the last complete JSON object is used. If Ultra's repair is still unusable, the same repair is retried once with Super instead of ending the run.</dd>
+        <dt>Why</dt><dd>On its first live calls, Ultra sometimes wrote “We need to output JSON…” before the object, even with a strict output schema. That ended the run with an error.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D25</span><span class="dec-title">Web sizes are checked against the model's own estimate</span><span class="dec-area">Tavily · trust</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The Planner now writes its own rough size for every object. If a web size is more than 2× off that estimate, the web value is dropped, the estimate is used, and the UI says “web size … rejected”. For round objects, code fixes the dimension order (the diameter is the smaller sideways value).</dd>
+        <dt>Why</dt><dd>Once the gripper-width check (D22) existed, it caught bad grounding the Builder used to paper over silently. A “toy block” came back as a 44 × 10 × 21 cm product, and a soda can came back as [12.2, 6.6, 12.2] cm with diameter and height mixed up. Tavily is still the source when it agrees with common sense, which is most of the time.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D26</span><span class="dec-title">The workspace is what the arm can actually reach</span><span class="dec-area">controller</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Objects and <code>at</code> goals must be at x 0.30–0.70 m and |y| ≤ 0.40 m, and within 0.78 m of the base. The limits are defined once and used by the Planner check, the Builder prompt and the scene check.</dd>
+        <dt>Why</dt><dd>A tower run failed all 4 attempts ($0.15) for two reasons. The Planner set the bottom block's goal to (0, 0), which is inside the robot's own base. And IK failed at x = 0.28 m, inside the old stated workspace. Solving IK on a grid of points showed where the gripper can really point straight down. The old limits (x from 0.25 m) were a guess.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D27</span><span class="dec-title">Report every scene problem at once</span><span class="dec-area">cost · speed</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Scene validation collects all problems (out of reach, too tall, overlapping, invented objects) into one message. The Builder may not add objects the task doesn't mention.</dd>
+        <dt>Why</dt><dd>One fruit-sorting run used all 4 attempts discovering one problem per attempt: a bin over the edge, then a bin too small, then an invented 1 m “table”, then that table's zero mass. With every problem listed, one repair can fix them all.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D28</span><span class="dec-title">The browser draws the replay; the server only simulates</span><span class="dec-area">product · cost</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Each attempt saves the position and rotation of every moving part, 30 times a second (about 0.5 MB for 30 s). The browser redraws the scene in 3D with three.js, using the robot's real meshes, which are exported once from MuJoCo and download as 1.4 MB. On the server, no MP4 is made. Only about 3 frames per second are rendered, for the Critic's image grid.</dd>
+        <dt>Why</dt><dd>Two weak points with one change. Cost: simulating the test scene on 2 CPUs went from 16 s to 2.9 s, so the smallest server is enough. Looks: shadows, a lab bench, the reachable area on the bench, and drag-to-orbit replace a flat software-rendered video.</dd>
+        <dt>Checked</dt><dd>The simulator is deterministic. Re-simulating the 9 attempts of the recorded runs from their saved plans reproduced every pass and fail exactly (<code>scripts/add_viz.py</code>), so the old runs got 3D replays with no model calls.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D29</span><span class="dec-title">Export the scene, and show the checks in 3D</span><span class="dec-area">impact · design</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>(1) An <b>Export scene</b> button downloads a zip: the objects as a MuJoCo XML file, <code>task.json</code> (real sizes with source links, plus the goals with their RoboLab names), <code>plan.json</code>, and a README with 4 lines of Python to load it next to the Menagerie Franka. (2) At the end of a replay, each goal appears as a ✓ or ✗ label on its object, with the measured error.</dd>
+        <dt>Why</dt><dd>Judges will ask where the AI is in the robot. The answer is that this is a tool for robotics teams: a sentence becomes a test scene with checkable goals, and the export makes that literal. The labels follow the Cosmos Cookoff winner's “see how it thinks” idea: the code's verdict is shown where it happened.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D30</span><span class="dec-title">$5 a day cap on model spend for the public demo</span><span class="dec-area">budget</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Every model call is logged with a timestamp. Once today's spend (UTC) reaches <code>DAILY_SPEND_LIMIT_USD</code> (now $5), new runs are refused with a message pointing to the recorded runs, which replay for free. The $20 total cap for development stays. The app also starts without API keys, so replays work even if keys are missing.</dd>
+        <dt>Why</dt><dd>Judges can run tasks until Dec 15, and each run costs $0.005–0.15. You asked for $5 a day for now, to be lowered before judging.</dd>
+      </dl></div>
+    </details>
+
   </div>
 </section>
 
@@ -425,6 +569,11 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
     <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Repair died mid-run</span><p>Super spent its whole token budget reasoning and returned nothing, which ended the run with an error. It now retries without reasoning (D16).</p></div>
     <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Contradictory goals</span><p>The Planner sometimes asked for a ball to be both “lifted” and “on the cube”. It now uses “lifted” only when the task ends with the object in the air.</p></div>
     <div class="card"><span class="label"><span class="pill p-ok">fixed</span>False “collision” hint</span><p>Normal arm lag of 2 cm was reported as a possible collision, which could mislead the Critic. The threshold is now 3.5 cm.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>An apple is not an iPhone</span><p>Searching “apple dimensions” returned Apple product pages, so the apple got iPhone numbers and the orange got AirPods specs (1.6 cm). Queries now name the kind of thing (“apple fruit”), and Nano ignores results about a different kind of object.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Round objects measured as boxes</span><p>Grasp width was measured with a box formula, so a rolled 6.8 cm tennis ball counted as 11.4 cm and was refused. Spheres and cylinders now use their real shape.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Cubes “tipped over”</span><p>A cube that rolled onto another face was reported as tipped 90°, even though it still sat flat. That would mislead the Critic. A box now counts as tipped only when no face points up.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>My own budget bug</span><p>While adding the daily cap, a text replacement made the budget check call itself forever, so starting any run crashed. A live test through the web API caught it before it shipped. There is now a unit test for the cap.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Same prompt, different luck</span><p>The fruit-sorting prompt passed on the first try once, then failed all 4 attempts on the next run (oversized bin, then a bin at the edge of reach). The cause was moved from prompts into code (D21). This is why the batch eval exists.</p></div>
   </div>
 </section>
 
@@ -435,8 +584,10 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
   <div class="cards">
     <div class="card"><span class="label"><span class="pill p-ok">resolved</span>Natural repair demo</span><p>Found two: the tennis ball rolling off the Rubik's cube, and a cube set down on the floor. Both are recorded in the app. Live runs vary: the tennis ball failed in 2 of 3 runs.</p></div>
     <div class="card"><span class="label"><span class="pill p-warn">open</span>Crash with 4 parallel CLI runs</span><p>One CLI run died during rendering while 4 ran at once in separate processes. Two at once in the web server works. The server's limit of 2 stays until this is understood.</p></div>
-    <div class="card"><span class="label"><span class="pill p-warn">open</span>Ultra never called</span><p>The escalation path is written but has not run live. Testing it costs about $0.01.</p></div>
-    <div class="card"><span class="label"><span class="pill p-warn">open</span>Linux rendering</span><p>On the Mac, rendering uses CGL. The Nebius container will use EGL or OSMesa, which is untested until deployment tonight.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">resolved</span>Ultra never called</span><p>Ultra has now run live several times: 15–96 s and $0.02–0.09 per repair. Once it wrote prose before its JSON, which is now handled (D24).</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">resolved</span>Linux rendering</span><p>The Docker image renders correctly with OSMesa on Linux (tested natively on arm64). It was 4× too slow until shadows were turned off (D18).</p></div>
+    <div class="card"><span class="label"><span class="pill p-bad">blocked</span>Nebius won't create resources</span><p>Creating a container registry or endpoint fails with “PermissionDenied”, even as a dry run, while reading the account works. AI Cloud billing is most likely not activated (Token Factory credit is separate). The commands are ready in <code>deploy/nebius/README.md</code>.</p></div>
+    <div class="card"><span class="label"><span class="pill p-warn">open</span>Demo must stay up until Dec 15</span><p>A 2 vCPU / 8 GB Nebius endpoint is about $0.07 an hour, or about $75 to Dec 15. Since D28, 2 vCPU is plenty. To decide at the end: free hosting (Hugging Face Spaces or Cloud Run) for the long-lived link, with Nebius for the eval Job. Model spend is capped at $5 a day (D30).</p></div>
     <div class="card"><span class="label"><span class="pill p-warn">open</span>Vision model latency</span><p>Fast with reasoning off (about 3 s), but the first call of a session once took 35 s. A slow first call needs a waiting state in the UI.</p></div>
   </div>
 </section>
@@ -462,14 +613,18 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <li class="done">4 example prompts and 4 recorded runs, 2 with a natural repair</li>
     </ul></div>
     <div class="day"><span class="label">Wed Oct 28 · night</span><ul>
-      <li class="now">Docker image, Nebius Serverless Endpoint (public demo URL)</li>
-      <li class="todo">Batch evaluation as a Nebius Serverless Job</li>
+      <li class="done">Docker image builds; Linux rendering tested and made 4× faster</li>
+      <li class="done">Harder tasks: bins, sorting, RoboLab-style goals, 6 objects, 30 s plans</li>
+      <li class="done">Batch eval script (<code>scripts/eval.py</code>), first local run</li>
+      <li class="done">3D replay in the browser, goal labels, scene export, $5/day cap</li>
+      <li class="now">Nebius endpoint and eval job: waiting on AI Cloud billing</li>
     </ul></div>
     <div class="day"><span class="label">Thu Oct 29</span><ul>
       <li class="todo">README, screenshots, demo video under 3 minutes, Devpost drafts</li>
     </ul></div>
     <div class="day"><span class="label">Fri Oct 30</span><ul>
-      <li class="todo">Make repo public, submit by 08:00 PT, leave the endpoint running for judging</li>
+      <li class="todo">Decide together: team name, free hosting for the demo link, a lower daily model cap</li>
+      <li class="todo">Make repo public, submit by 08:00 PT, leave the demo running for judging</li>
     </ul></div>
   </div>
 </section>
@@ -489,6 +644,10 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
     <div><dt>Contact sheet</dt><dd>One image holding 8 timestamped frames of a run, sent to the Critic.</dd></div>
     <div><dt>Token Factory</dt><dd>Nebius's API for hosted open models, compatible with OpenAI's client.</dd></div>
     <div><dt>LangSmith</dt><dd>Tracing service. Shows every model call of a run as a tree.</dd></div>
+    <div><dt>OSMesa</dt><dd>Software OpenGL. Lets MuJoCo render video on a server with no GPU.</dd></div>
+    <div><dt>RoboLab</dt><dd>NVIDIA's Isaac Lab benchmark of 120 tabletop tasks. Its success tests inspired our goal types.</dd></div>
+    <div><dt>Isaac Lab-Arena</dt><dd>NVIDIA's framework for evaluating robot policies. It can generate environment specs from language.</dd></div>
+    <div><dt>Bin</dt><dd>Our open-top container: a floor plate and four walls, fixed in place.</dd></div>
   </dl>
 </section>
 

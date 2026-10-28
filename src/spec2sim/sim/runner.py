@@ -15,11 +15,11 @@ from spec2sim.schemas import Action, Build, Goal, RunResult
 from spec2sim.sim.controller import GRIP_CLOSED, GRIP_OPEN, HOME_Q, Controller, IKError
 from spec2sim.sim.metrics import check_goal
 from spec2sim.sim.render import FPS, Recorder
-from spec2sim.sim.scene import OBJ_PREFIX, SceneError, build_scene
+from spec2sim.sim.scene import BIN_WALL, OBJ_PREFIX, SceneError, build_scene
 
 CTRL_DT = 0.01  # seconds between IK/control updates
 SETTLE_START, SETTLE_END = 0.3, 0.8
-MAX_SIM_TIME = 16.0
+MAX_SIM_TIME = 32.0  # room for 4-5 pick-and-place moves
 
 
 def _smoothstep(x: float) -> float:
@@ -27,8 +27,8 @@ def _smoothstep(x: float) -> float:
 
 
 class _Sim:
-    def __init__(self, build: Build):
-        self.scene = build_scene(build.objects)
+    def __init__(self, build: Build, out_dir: Path, allowed: set[str] | None = None):
+        self.scene = build_scene(build.objects, allowed)
         self.m = self.scene.model
         self.d = mujoco.MjData(self.m)
         self.d.qpos[self.scene.arm_qpos] = HOME_Q
@@ -36,7 +36,7 @@ class _Sim:
         self.d.qpos[self.m.joint("finger_joint2").qposadr[0]] = 0.04
         mujoco.mj_forward(self.m, self.d)
         self.ctl = Controller(self.scene, self.d)
-        self.rec = Recorder(self.m)
+        self.rec = Recorder(self.m, out_dir)
         self.events: list[str] = []
         self.n_sub = round(CTRL_DT / self.m.opt.timestep)
         self.next_frame = 0.0
@@ -108,8 +108,10 @@ class _Sim:
             if other == name:
                 continue
             c = self.d.body(OBJ_PREFIX + other).xpos
-            if np.all(np.abs(p[:2] - c[:2]) < np.array(q.size[:2]) / 2) and c[2] + q.size[2] / 2 <= bottom + 0.02:
-                t = c[2] + q.size[2] / 2
+            # A bin's support surface is its floor, not its rim.
+            surface = c[2] - q.size[2] / 2 + BIN_WALL if q.shape == "bin" else c[2] + q.size[2] / 2
+            if np.all(np.abs(p[:2] - c[:2]) < np.array(q.size[:2]) / 2) and surface <= bottom + 0.02:
+                t = surface
                 if t > top:
                     below, top = other, t
         return (f"center at {np.round(p, 3).tolist()}, bottom {(bottom - top) * 100:.1f} cm above {below}")
@@ -119,24 +121,41 @@ class _Sim:
             if o.fixed:
                 continue
             b = self.d.body(OBJ_PREFIX + name)
-            up = b.xmat.reshape(3, 3)[:, 2]
-            tilt = np.degrees(np.arccos(np.clip(up[2], -1, 1)))
-            if tilt > 25 and o.shape != "sphere":
+            R = b.xmat.reshape(3, 3)
+            tilt = np.degrees(np.arccos(np.clip(R[2, 2], -1, 1)))
+            # A box that rolled onto another face still rests flat; only report it as tipped
+            # when no face points up (it leans on an edge or another object).
+            face_tilt = np.degrees(np.arccos(np.clip(np.max(np.abs(R[2, :])), -1, 1)))
+            if o.shape == "box" and tilt > 25:
+                self.event(f"{name} tipped over ({face_tilt:.0f} deg off flat)" if face_tilt > 15
+                           else f"{name} rolled onto another face (still flat)")
+            elif o.shape == "cylinder" and tilt > 25:
                 self.event(f"{name} tipped over ({tilt:.0f} deg)")
             if b.xpos[2] < -0.05 or np.linalg.norm(b.xpos[:2]) > 1.5:
                 self.event(f"{name} fell out of the workspace")
 
 
-def run(build: Build, goals: list[Goal], out_dir: Path) -> RunResult:
+def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None = None) -> RunResult:
+    """`allowed`: the task's object names (the Builder may not add or drop objects)."""
     t0 = time.time()
     try:
-        sim = _Sim(build)
+        sim = _Sim(build, out_dir, allowed)
     except SceneError as e:
         return RunResult(success=False, goals=[], events=[], error=str(e))
 
     error = None
     try:
         sim.hold(SETTLE_START)
+        # A placement goal that already holds before the robot moves means the scene was set up
+        # to fake the result (a repair once "solved" a task by starting the orange in the basket).
+        cheats = [g for g in goals if g.type in ("on", "inside")
+                  and check_goal(sim.scene, sim.d, g, None).ok]
+        if cheats:
+            g = cheats[0]
+            error = (f"{g.obj} already starts {g.type} {g.target}; objects must start away from "
+                     "their goal so the robot does the task")
+            sim.rec.close()
+            return RunResult(success=False, goals=[], events=[], error=error)
         for i, a in enumerate(build.plan.actions):
             try:
                 sim.do(a)
@@ -150,11 +169,11 @@ def run(build: Build, goals: list[Goal], out_dir: Path) -> RunResult:
     sim.tilt_events()
 
     results = [check_goal(sim.scene, sim.d, g, sim.ctl.held) for g in goals]
-    video, frames, sheet = sim.rec.save(out_dir)
+    video, frames, sheet, viz = sim.rec.save(sim.events, [r.model_dump() for r in results])
     sim.rec.close()
     return RunResult(
         success=error is None and bool(results) and all(r.ok for r in results),
         goals=results, events=sim.events, error=error,
-        video_path=video, frame_paths=frames, contact_sheet_path=sheet,
+        video_path=video, frame_paths=frames, contact_sheet_path=sheet, viz_path=viz,
         duration_s=round(time.time() - t0, 2),
     )

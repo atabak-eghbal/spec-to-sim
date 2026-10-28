@@ -11,5 +11,6 @@ Status legend: ✅ verified while building · 🔎 to verify · 📌 decision ma
 | [04-tavily-langsmith.md](04-tavily-langsmith.md) | Tavily search API, LangSmith tracing |
 | [05-mujoco.md](05-mujoco.md) | MuJoCo, Menagerie robots, IK, headless rendering |
 | [06-rules-checklist.md](06-rules-checklist.md) | Hackathon rules distilled into a checklist |
+| [07-nvidia-physical-ai.md](07-nvidia-physical-ai.md) | Isaac Lab-Arena agentic env generation, RoboLab predicates, Cosmos Reason critic |
 
 Rule: when a doc is used to make a decision, add a 📌 line under it.
