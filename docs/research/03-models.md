@@ -25,4 +25,12 @@ Sources:
 ~4 calls × ~4K in / 1K out on Super/VL ≈ $0.01 per iteration; Ultra escalation ≈ $0.02.
 Full dev + demo + 20-prompt eval should stay well under $15.
 
+## Verified 2026-10-28 (scripts/list_models.py, scripts/smoke_apis.py)
+- ✅ All 4 IDs above exist exactly as written (+ `nvidia/Nemotron-3_5-Lightning`). 30 models total on Token Factory.
+- ✅ Super VL accepts base64 PNG via `image_url` data URI.
+- Super returns `reasoning_content` alongside `content`; Nano returned none on a trivial prompt.
+- ⚠️ Super VL latency on one 848x480 frame: 35 s, 34 s, 10 s. `chat_template_kwargs={"enable_thinking": False}` is accepted
+  and removes reasoning (25 output tokens) but did NOT cut latency → server-side image/queue time. Measure with
+  6–8 frames; consider downscaling frames or a contact-sheet grid image to send 1 image instead of 8.
+
 📌 Escalation policy: Super handles attempts 1–2, Ultra only from attempt 3. Show this in the UI.

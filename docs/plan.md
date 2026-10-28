@@ -3,10 +3,11 @@
 Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 
 ## Tue Oct 27 (evening) — Setup  ⏱ ~2h
-- [ ] Create accounts / API keys: Token Factory, Tavily, LangSmith, Nebius AI Cloud (CLI auth)
-- [ ] Create public GitHub repo `spec-to-sim`, push this scaffold, MIT license shows in About
-- [x] `uv sync` — [ ] fill `.env` keys
-- [ ] Smoke test: list Token Factory models, record exact Nemotron IDs
+- [x] Create accounts / API keys: Token Factory, Tavily, LangSmith — [ ] Nebius AI Cloud (CLI auth)
+- [x] GitHub repo `spec-to-sim` created, MIT detected — kept **private** until submission day; flip to public before Devpost
+- [x] `uv sync`, fill `.env`
+- [x] Smoke test: list Token Factory models, record exact Nemotron IDs (all 4 confirmed; `src/spec2sim/config.py`)
+- [x] Live API smoke test: Nano, Super, Super VL (image), Tavily, LangSmith trace (`scripts/smoke_apis.py`)
 - [x] Smoke test: load Franka Panda from MuJoCo Menagerie, render 3 s MP4 headless (`scripts/smoke_render.py`)
 
 ## Wed Oct 28 (morning) — Core loop on CLI  ⏱ ~5h
@@ -35,6 +36,7 @@ Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 - [ ] Draft all Devpost fields in `docs/devpost/`
 
 ## Fri Oct 30 (morning) — Submit
+- [ ] **Make GitHub repo public** (`gh repo edit --visibility public --accept-visibility-change-consequences`)
 - [ ] Fill Devpost, double-check every required field, submit by 08:00 PT
 - [ ] Leave endpoint running (judging Dec 1–15) — see cost note in docs/research/02-nebius-platform.md
 
