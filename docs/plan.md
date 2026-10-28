@@ -1,6 +1,6 @@
 # Build Plan (all times Pacific)
 
-Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
+Deadline: **Fri Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 
 ## Tue Oct 27 (evening) — Setup  ⏱ ~2h
 - [x] Create accounts / API keys: Token Factory, Tavily, LangSmith, Nebius AI Cloud (CLI profile `spec2sim`, project `project-e00yz5abpr00fd1bg6p5he`)
@@ -11,13 +11,13 @@ Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 - [x] Smoke test: load Franka Panda from MuJoCo Menagerie, render 3 s MP4 headless (`scripts/smoke_render.py`)
 
 ## Wed Oct 28 (morning) — Core loop on CLI  ⏱ ~5h
-- [ ] Pydantic schemas: TaskSpec, SceneObjects, MotionPlan, RunResult, Critique
-- [ ] Planner (Super) → TaskSpec
-- [ ] Grounder (Tavily + Nano) → object facts with sources (+ disk cache)
-- [ ] Builder (Super) → objects fragment + waypoints
-- [ ] Runner: IK controller (mink), grasp fallback, success metrics, MP4
-- [ ] Critic (Super VL) on sampled frames → Critique
-- [ ] Loop with escalation to Ultra; LangSmith tracing on every call
+- [x] Pydantic schemas: TaskSpec, GroundedFacts, Build (objects + MotionPlan), RunResult, Critique
+- [x] Planner (Super) → TaskSpec
+- [x] Grounder (Tavily + Nano) → object facts with sources (+ disk cache)
+- [x] Builder (Super) → objects (data → MJCF in code) + action plan
+- [x] Runner: own DLS IK (mink not needed), weld grasp assist w/ 8 cm width limit, success metrics, MP4 + contact sheet
+- [x] Critic (Super VL, thinking off ≈3 s) on one 8-frame contact sheet → Critique
+- [x] Loop with escalation to Ultra; LangSmith tracing on every call (Ultra path not yet exercised live)
 
 ## Wed Oct 28 (afternoon/evening) — Product  ⏱ ~5h
 - [ ] FastAPI backend + Server-Sent Events streaming each step

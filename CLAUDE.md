@@ -12,7 +12,7 @@ itself until the task succeeds. Every step is traced in **LangSmith** and shown 
 
 - **Hackathon:** Nebius x NVIDIA Global AI Hackathon (Devpost)
 - **Track:** Physical AI (no hardware → video must show ≥1 min of "key application modules in action")
-- **Deadline:** **Thu Oct 30, 2026, 10:00 AM PT**. Internal target: submitted by **08:00 AM PT** (2h buffer).
+- **Deadline:** **Fri Oct 30, 2026, 10:00 AM PT**. Internal target: submitted by **08:00 AM PT** (2h buffer).
 - **Entrant:** solo, Vancouver, BC resident.
 
 ## 2. Non-negotiables (from the official rules)
