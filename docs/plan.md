@@ -3,7 +3,7 @@
 Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 
 ## Tue Oct 27 (evening) — Setup  ⏱ ~2h
-- [x] Create accounts / API keys: Token Factory, Tavily, LangSmith — [ ] Nebius AI Cloud (CLI auth)
+- [x] Create accounts / API keys: Token Factory, Tavily, LangSmith, Nebius AI Cloud (CLI profile `spec2sim`, project `project-e00yz5abpr00fd1bg6p5he`)
 - [x] GitHub repo `spec-to-sim` created, MIT detected — kept **private** until submission day; flip to public before Devpost
 - [x] `uv sync`, fill `.env`
 - [x] Smoke test: list Token Factory models, record exact Nemotron IDs (all 4 confirmed; `src/spec2sim/config.py`)
