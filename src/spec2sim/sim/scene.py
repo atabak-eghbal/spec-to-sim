@@ -252,6 +252,14 @@ def build_scene(objects: list[SceneObject], allowed: set[str] | None = None,
     spec.body("hand").add_site(name="tcp", pos=[0, 0, TCP_OFFSET], size=[0.005, 0, 0])
 
     _add_objects(spec, objects, grasp_welds=True, physics=physics)
+    if physics:
+        # The robot's own damped contacts win against objects (solmix 100 vs 10): fingertip pads absorb
+        # impacts, so a bouncy ball isn't kicked away by a touch; object-vs-surface contacts keep the
+        # web bounciness (object solmix 10 vs floor/bin 1).
+        for b in spec.bodies:
+            if b.name and not b.name.startswith(OBJ_PREFIX) and b.name != "world":
+                for g in b.geoms:
+                    g.solmix = 100.0
     try:
         model = spec.compile()
     except Exception as e:  # MuJoCo compile errors are plain exceptions

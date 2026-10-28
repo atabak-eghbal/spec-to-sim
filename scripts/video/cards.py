@@ -77,7 +77,7 @@ model = robot.compile()   # test your own policy</pre></div>
 <tr><td>Open the drawer, put the Rubik's cube in, close it</td><td class="ok">✓ pass</td></tr>
 <tr><td>Tennis ball and Rubik's cube into the drawer, close it</td><td class="ok">✓ pass</td></tr>
 <tr><td>Knock over the tower of three blocks</td><td class="ok">✓ pass</td></tr>
-</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Whole development so far: under $2 of model calls.</p></div>""",
+</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Whole development so far: under $3 of model calls.</p></div>""",
 }
 
 
@@ -101,7 +101,7 @@ def main(tags=()):
             page.set_content(HEAD + body); page.wait_for_timeout(1200)
             page.screenshot(path=str(OUT / f"{name}.png"))
         bg = HERE / "cards/close_bg.jpg"
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-sseof", "-1.5", "-i", str(HERE / "clips2/c3_result.mp4"),
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-sseof", "-1.5", "-i", str(HERE / "clips3/c3_result.mp4"),
                         "-frames:v", "1", str(bg)], check=True)
         page.set_content(HEAD + close_card(bg)); page.wait_for_timeout(1200)
         page.screenshot(path=str(OUT / "h_close.png"))

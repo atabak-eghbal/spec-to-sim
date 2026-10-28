@@ -1,7 +1,9 @@
 # Demo video pipeline
 
-v2 (current, 2:41): `capture2.py live|rest|cards` then `narrate.py` then `assemble2.py`
-(burned-in captions, speed/LIVE tags, caption band for UI close-ups). v1 scripts are kept for reference.
+v3 (current, 2:48): `capture2.py rest|cards`, `capture3.py live|drag|tavily|after`, `narrate.py`, `assemble3.py`.
+v3 rules, enforced in code: 3D replays play at most 1.3x; waiting is cut out at 1x with "N s skipped" tags;
+no part may be longer than its footage (no frozen frames); static shots get a slow push-in.
+Captions are burned in and also written as .srt. v1/v2 scripts are kept for reference.
 
 Builds the demo video from the running app, with no manual editing:
 

@@ -162,9 +162,9 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
   <div class="status">
     <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
     <div><span class="label">Target submit</span><b>08:00 PT</b></div>
-    <div><span class="label">Model spend</span><b>$1.55 / $20 cap</b></div>
+    <div><span class="label">Model spend</span><b>$2.60 / $20 cap</b></div>
     <div><span class="label">Eval</span><b>11 / 11 tasks pass</b></div>
-    <div><span class="label">Tests</span><b>22 / 22 passing</b></div>
+    <div><span class="label">Tests</span><b>26 / 26 passing</b></div>
     <div><span class="label">Repo</span><b>private until submit</b></div>
   </div>
 </header>
@@ -297,7 +297,7 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
 
 <section>
   <span class="label">Batch evaluation</span>
-  <h2>From 4 of 8 tasks passing to 11 of 11</h2>
+  <h2>From 4 of 8 tasks passing to 11 of 11, now with web-sourced physics</h2>
   <p class="col"><code>scripts/eval.py</code> runs a fixed suite of 8 prompts through the whole pipeline and counts how many pass. Only the code checks decide pass or fail. Each round's failures were traced and fixed in code, not by retrying prompts until they passed. The same script will run on Nebius as a Serverless Job, with 3 repeats per prompt.</p>
   <div class="tbl">
     <table>
@@ -308,6 +308,7 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
         <tr><td>3</td><td class="num"><b>8 / 8</b></td><td class="num">3 / 8</td><td class="num">$0.17</td><td>First-try misses: an invented “table” object (2 runs), a 10 cm bin for three blocks, the tennis ball rolling off. The first two are now fixed.</td></tr>
         <tr><td>4 (drawers, knock-over)</td><td class="num">2 / 3</td><td class="num">1 / 3</td><td class="num">$0.09</td><td>Cabinet placed out of reach, the placeholder name <code>D.handle</code> copied literally, two objects dropped on the same spot.</td></tr>
         <tr><td>5 (same 3, fixed)</td><td class="num"><b>3 / 3</b></td><td class="num"><b>3 / 3</b></td><td class="num">$0.02</td><td>All three passed on the first try.</td></tr>
+        <tr><td>6 (all 11, web physics)</td><td class="num"><b>11 / 11</b></td><td class="num">9 / 11</td><td class="num">$0.11</td><td>Two tasks first crashed on a web size with a zero dimension. Fixed; both re-ran and passed first try.</td></tr>
       </tbody>
     </table>
   </div>
@@ -628,6 +629,31 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       </dl></div>
     </details>
 
+    <details class="dec">
+      <summary><span class="dec-id">D38</span><span class="dec-title">Tavily changes the physics, not just the sizes</span><span class="dec-area">Tavily</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Each object gets a material. Friction and bounciness for each material come from targeted Tavily searches, kept in a shared cached knowledge base, and are fed into MuJoCo's contact settings. The Franka's gripper stroke (80 mm), payload (3 kg) and reach (855 mm) come from its datasheet, so the "physically infeasible" message cites a source on both sides. Every size is cross-checked across results ("4/4 agree"), and each object shows a product photo.</dd>
+        <dt>Integrity checks</dt><dd>(1) Every quote must appear word for word in the fetched text. Nano once invented a spec-sheet quote ("100 mm") with a real URL; it is now rejected. (2) Per-material plausibility ranges: a rubber bounciness of 0.156 was rejected. (3) Size against weight, two out of three: a "20 cm" grapefruit weighing 246 g is really 8 cm. (4) Incomplete web sizes are treated as missing. A crash from one was caught by the eval.</dd>
+        <dt>Calibration</dt><dd>The textbook bounce formula made a rubber ball bounce higher than it was dropped in MuJoCo, because the integrator adds energy at low damping. Bounciness is mapped through a measured curve instead (web 0.60 → simulated 0.60). The robot's own contacts stay damped: with real bounciness, the fingertips were kicking the tennis ball away. That fix raised one plan's stress score from 3/16 to 10/16.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D39</span><span class="dec-title">The gallery leads with self-repair</span><span class="dec-area">design</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The tabs are now <b>The AI fixes itself</b> (default: tennis ball, cube on the floor, fruit bins, drawer out of reach), <b>Beyond pick &amp; place</b>, and <b>First-try successes</b>. The landing page opens on the tennis-ball Before / after.</dd>
+        <dt>Why</dt><dd>You asked that first-try successes not be the first thing people see. The repair loop is the idea that sets the project apart.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D40</span><span class="dec-title">Video v3: no frozen or rushed footage</span><span class="dec-area">video</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>3D replays play at most 1.3×. Waiting is cut out at normal speed, and each cut is labelled with the time skipped. The assembly refuses any shot longer than its footage, and static shots push in slowly. The live run in the video includes a real self-repair.</dd>
+        <dt>Why</dt><dd>Your review of v2: some animations froze, and others went too fast (8–10× fast-forward).</dd>
+      </dl></div>
+    </details>
+
   </div>
 </section>
 
@@ -699,7 +725,8 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <li class="done">Batch eval script (<code>scripts/eval.py</code>), first local run</li>
       <li class="done">3D replay in the browser, goal labels, scene export, $5/day cap</li>
       <li class="done">Stress test, drawers, knock-over, realistic view, example tabs, README, video plan</li>
-      <li class="done">Demo video v2 (2:41): live run, Tavily beat, before/after, drag test, training data, NVIDIA comparison; captions burned in</li>
+      <li class="done">Demo video v3 (2:48): live self-repair, Tavily physics and sourced limits, before/after, drag test, training data, NVIDIA comparison; no frozen or rushed shots</li>
+      <li class="done">Tavily: web physics, datasheet limits, cross-checks, photos, verified quotes; gallery leads with self-repair</li>
       <li class="done">Before/after, ghost, try-to-break-it, training data (LeRobot), cascade strip, dark theme</li>
       <li class="now">Nebius endpoint and eval job: waiting on AI Cloud billing</li>
     </ul></div>

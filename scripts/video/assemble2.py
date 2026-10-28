@@ -174,7 +174,7 @@ font:500 38px/1.3 'IBM Plex Sans';color:#fff;background:rgba(8,12,16,0.78);paddi
     sr = 24000
     track = np.zeros(int((total + 1) * sr), dtype=np.float32)
     for name, _ in segs:
-        a, _sr = sf.read(AUDIO / f"{name}.wav", dtype="float32")
+        a, r = sf.read(AUDIO / f"{name}.wav", dtype="float32")
         k = int(starts[name] * sr)
         track[k:k + len(a)] += a[: len(track) - k]
     sf.write(PARTS / "narration.wav", track[: int(total * sr)], sr)

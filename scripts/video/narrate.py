@@ -11,7 +11,7 @@ from misaki import en
 # Pronunciations for names the dictionary doesn't know (misaki inline phoneme syntax).
 SAY = {
     "Nemotron": "[Nemotron](/nˈɛmətɹɑn/)", "Nebius": "[Nebius](/nˈɛbiəs/)",
-    "MuJoCo": "[MuJoCo](/mjˈuʤˌOkO/)", "Tavily": "[Tavily](/tˈævᵻli/)", "Rubik's": "[Rubik's](/ɹˈubɪks/)",
+    "MuJoCo": "[MuJoCo](/mjˈuʤˌOkO/)", "datasheet": "[datasheet](/dˈATəʃˌit/)", "Tavily": "[Tavily](/tˈævᵻli/)", "Rubik's": "[Rubik's](/ɹˈubɪks/)",
     "GR00T": "[GR00T](/ɡɹˈut/)", "Franka": "[Franka](/fɹˈæŋkə/)", "Serverless": "[Serverless](/sˈɜɹvəɹləs/)",
     "verified": "[verified](/vˈɛɹəfˌId/)", "LeRobot": "[LeRobot](/lə ɹˈObˌɑt/)", "LangSmith": "[LangSmith](/lˈæŋ smˈɪθ/)",
 }
@@ -27,14 +27,15 @@ SEGMENTS = {
     "b_problem": "Building one robot test scene by hand takes days: measuring objects, writing scene files, "
                  "writing success checks. Spec-to-Sim does it from plain English, with NVIDIA Nemotron models "
                  "on Nebius Token Factory.",
-    "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily searches "
-              "the web for each object's real size and weight, and Nemotron Nano reads off the numbers, with their "
-              "sources. Super places the objects and plans the motion, as data, never code. MuJoCo runs it, and code, "
-              "not a model, checks every goal.",
-    "d_tavily": "Those real facts change outcomes. Here, Tavily found that a large apple is eight point three "
-                "centimetres wide, more than the Panda's gripper can open. So Spec-to-Sim stops in seconds and says "
-                "why, instead of paying for repairs that can't work. And web numbers that make no sense, like a "
-                "two-millimetre lime, are caught and replaced.",
+    "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily grounds "
+              "every object in real sizes. Super places the objects and plans the motion, as data, never code. MuJoCo "
+              "runs it, and code checks every goal. Here the first scene put a bin out of reach. The Critic caught it, "
+              "Super fixed it, and attempt two passes.",
+    "d_tavily": "Tavily is the reality check. Every size is cross-checked across sources, with photos and links. "
+                "Friction and bounciness come from the web too, and MuJoCo uses them, so a rubber ball behaves like one. "
+                "Even the robot's limits come from Franka's datasheet. When the web says a grapefruit is eighteen "
+                "centimetres but weighs two hundred and forty-six grams, the weight wins: it's really eight. Still too "
+                "wide for the gripper, so Spec-to-Sim stops in seconds and says why.",
     "e_repair": "When a plan fails, it fixes itself. On the left, the ball was released a centimetre and a half too "
                 "high, and rolled off. Code measures the miss. Nemotron Super V L looks at the frames and explains "
                 "why, and Super rewrites the plan. On the right, attempt two. If a repair fails again, it escalates "
