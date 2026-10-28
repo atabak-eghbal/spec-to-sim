@@ -72,7 +72,20 @@ One OpenAI-compatible client and one API key; each pipeline step picks the model
 
 **Other Nebius services:** the app and simulator ship as one CPU container (`Dockerfile`) for a **Nebius Serverless Endpoint**, and `scripts/eval.py` runs as a **Nebius Serverless Job** (`deploy/nebius/README.md`).
 
-**Also used:** **Tavily** (search for real-world object facts, cached on disk, at most 3 searches per run) and **LangSmith** (every model call and simulator run traced; each run in the UI links to its trace).
+## How we use Tavily: the reality check
+
+Tavily's results change what gets simulated, not just what gets displayed:
+
+| What Tavily grounds | How it changes the simulation | Integrity check |
+|---|---|---|
+| **Object size and mass** (product pages, standards, with photos) | Scene geometry and inertia | Up to 3 independent sources per object, shown as "N/M agree"; sizes far from the Planner's own estimate are rejected (a 2 mm lime); size vs weight, two out of three (a "20 cm, 246 g" grapefruit is really 8 cm) |
+| **Material friction and bounciness** (engineering tables, measurements) | MuJoCo contact friction and restitution, with restitution mapped through a measured MuJoCo calibration curve, so a rubber ball bounces like one | Per-material plausibility ranges; failures fall back to clearly labelled typical values |
+| **Robot limits** (Franka datasheet: 80 mm gripper stroke, 3 kg payload, 855 mm reach) | The "physically infeasible" check before any build: object size from the web against gripper size from the datasheet | Quote must match the datasheet text |
+| **Every number** | Carried into the scene export (`task.json`) and the LeRobot dataset metadata, so training data stays traceable to its sources | **Every quote must appear word for word in the fetched text.** A model once invented a spec-sheet quote with a real URL; it is now rejected |
+
+Object searches are cached on disk (at most 3 per run). Material and robot facts form a shared, cached knowledge base (`scripts/build_physics_kb.py`), so later runs cost nothing extra.
+
+**Also used:** **LangSmith** (every model call and simulator run traced; each run in the UI links to its trace).
 
 ## Design decisions that make it trustworthy
 
