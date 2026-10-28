@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+runs/          # per-run videos, frames, logs
+.cache/        # Tavily + LLM response cache
+*.mp4
+!assets/*.mp4
+.DS_Store

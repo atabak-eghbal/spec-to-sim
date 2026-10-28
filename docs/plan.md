@@ -1,0 +1,44 @@
+# Build Plan (all times Pacific)
+
+Deadline: **Thu Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
+
+## Tue Oct 27 (evening) — Setup  ⏱ ~2h
+- [ ] Create accounts / API keys: Token Factory, Tavily, LangSmith, Nebius AI Cloud (CLI auth)
+- [ ] Create public GitHub repo `spec-to-sim`, push this scaffold, MIT license shows in About
+- [ ] `uv sync`, fill `.env`
+- [ ] Smoke test: list Token Factory models, record exact Nemotron IDs
+- [ ] Smoke test: load Franka Panda from MuJoCo Menagerie, render 3 s MP4 headless
+
+## Wed Oct 28 (morning) — Core loop on CLI  ⏱ ~5h
+- [ ] Pydantic schemas: TaskSpec, SceneObjects, MotionPlan, RunResult, Critique
+- [ ] Planner (Super) → TaskSpec
+- [ ] Grounder (Tavily + Nano) → object facts with sources (+ disk cache)
+- [ ] Builder (Super) → objects fragment + waypoints
+- [ ] Runner: IK controller (mink), grasp fallback, success metrics, MP4
+- [ ] Critic (Super VL) on sampled frames → Critique
+- [ ] Loop with escalation to Ultra; LangSmith tracing on every call
+
+## Wed Oct 28 (afternoon/evening) — Product  ⏱ ~5h
+- [ ] FastAPI backend + Server-Sent Events streaming each step
+- [ ] Single-page UI: prompt box, live step timeline with model badges (Nano/Super/Ultra/VL), cost/tokens, per-iteration video, Tavily sources, LangSmith trace link
+- [ ] 4–5 curated example prompts that reliably succeed (one that needs a repair loop!)
+
+## Wed Oct 28 (night) — Nebius deployment  ⏱ ~3h
+- [ ] Dockerfile (osmesa/egl), push image
+- [ ] Deploy as **Nebius Serverless Endpoint** (public URL = demo link)
+- [ ] Batch eval as **Nebius Serverless Job** → results table committed to `docs/eval.md`
+
+## Thu Oct 29 — Polish, docs, video  ⏱ ~6h
+- [ ] README final (Nemotron + Token Factory section, architecture diagram, eval table)
+- [ ] Screenshots / GIF into `assets/`
+- [ ] Record demo video (≤ 2:45), upload to YouTube
+- [ ] Draft all Devpost fields in `docs/devpost/`
+
+## Fri Oct 30 (morning) — Submit
+- [ ] Fill Devpost, double-check every required field, submit by 08:00 PT
+- [ ] Leave endpoint running (judging Dec 1–15) — see cost note in docs/research/02-nebius-platform.md
+
+## Cut list (if behind schedule, cut in this order)
+1. Batch-eval Serverless Job → run eval locally, keep Job for one small run
+2. UR5e second robot
+3. Ultra escalation → keep only if one example needs it
