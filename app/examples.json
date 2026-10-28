@@ -94,7 +94,8 @@
       "title": "Drawer: two objects, then close",
       "prompt": "Put the tennis ball and the Rubik's cube into the drawer and close it",
       "run_id": "20261028-142918-490a",
-      "category": "beyond"
+      "category": "beyond",
+      "hero": true
     },
     {
       "title": "Knock over a block tower",

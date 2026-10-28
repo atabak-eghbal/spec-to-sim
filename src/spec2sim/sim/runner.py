@@ -45,13 +45,29 @@ class _Sim:
         self.events: list[str] = []
         self.n_sub = round(CTRL_DT / self.m.opt.timestep)
         self.next_frame = 0.0
+        # Highest point each loose object has RESTED at (not held, nearly still): 'toppled' is
+        # judged against it, so "stack it, then knock it down" works and carrying doesn't count.
+        self.movable = [n for n, o in self.scene.objects.items() if not o.fixed]
+        self.peaks = {n: float(self.d.body(OBJ_PREFIX + n).xpos[2]) for n in self.movable}
+        self.next_peak = 0.0
+        self.on_tick = None  # optional per-step hook (dataset recording)
 
     def tick(self) -> None:
         self.ctl.apply()
         mujoco.mj_step(self.m, self.d, nstep=self.n_sub)
+        if self.on_tick:
+            self.on_tick()
         if self.rec and self.d.time >= self.next_frame:
             self.rec.capture(self.d)
             self.next_frame += 1.0 / FPS
+        if self.d.time >= self.next_peak:
+            self.next_peak += 0.1
+            for n in self.movable:
+                if n == self.ctl.held:
+                    continue
+                b = self.d.body(OBJ_PREFIX + n)
+                if np.linalg.norm(b.cvel[3:]) < 0.02:
+                    self.peaks[n] = max(self.peaks[n], float(b.xpos[2]))
         if self.d.time > MAX_SIM_TIME:
             raise IKError(f"plan exceeds {MAX_SIM_TIME:.0f} s of sim time")
 
@@ -185,7 +201,7 @@ def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None
         error = str(e)
     sim.tilt_events()
 
-    results = [check_goal(sim.scene, sim.d, g, sim.ctl.held) for g in goals]
+    results = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
     video, frames, sheet, viz = sim.rec.save(sim.events, [r.model_dump() for r in results])
     sim.rec.close()
     return RunResult(
@@ -212,6 +228,33 @@ def _execute(sim: _Sim, build: Build) -> str | None:
     return None
 
 
+def perturb(build: Build, rng, pos_jitter: float = 0.015, yaw_jitter: float = 0.15,
+            mass_scale: float = 0.2, friction_scale: float = 0.3):
+    """One random variant of a build: loose objects nudged, turned, heavier/lighter; one friction
+    scale for all objects. Furniture stays put. Returns (build, model tweak, description)."""
+    objs, change = [], {}
+    for o in build.objects:
+        if o.fixed or o.shape in ("bin", "drawer"):
+            objs.append(o)
+            continue
+        dx, dy = rng.uniform(-pos_jitter, pos_jitter, 2)
+        dyaw = rng.uniform(-yaw_jitter, yaw_jitter) if o.shape != "sphere" else 0.0
+        k = rng.uniform(1 - mass_scale, 1 + mass_scale)
+        objs.append(o.model_copy(update={"pos": (o.pos[0] + dx, o.pos[1] + dy, o.pos[2]),
+                                         "yaw": o.yaw + dyaw, "mass": o.mass * k}))
+        change[o.name] = {"dx_cm": round(dx * 100, 1), "dy_cm": round(dy * 100, 1),
+                          "yaw_deg": round(float(np.degrees(dyaw)), 1), "mass_x": round(k, 2)}
+    fk = rng.uniform(1 - friction_scale, 1 + friction_scale)
+
+    def tweak(m, fk=fk):
+        for g in range(m.ngeom):
+            if m.body(m.geom_bodyid[g]).name.startswith(OBJ_PREFIX):
+                m.geom_friction[g, 0] *= fk
+
+    change["_friction_x"] = round(fk, 2)
+    return build.model_copy(update={"objects": objs}), tweak, change
+
+
 def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0,
                 pos_jitter: float = 0.015, yaw_jitter: float = 0.15, mass_scale: float = 0.2,
                 friction_scale: float = 0.3) -> dict:
@@ -227,36 +270,18 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0
     attempts = 0
     while len(rows) < trials and attempts < trials * 3:
         attempts += 1
-        objs, change = [], {}
-        for o in build.objects:
-            if o.fixed or o.shape in ("bin", "drawer"):  # furniture stays put
-                objs.append(o)
-                continue
-            dx, dy = rng.uniform(-pos_jitter, pos_jitter, 2)
-            dyaw = rng.uniform(-yaw_jitter, yaw_jitter) if o.shape != "sphere" else 0.0
-            k = rng.uniform(1 - mass_scale, 1 + mass_scale)
-            objs.append(o.model_copy(update={"pos": (o.pos[0] + dx, o.pos[1] + dy, o.pos[2]),
-                                             "yaw": o.yaw + dyaw, "mass": o.mass * k}))
-            change[o.name] = {"dx_cm": round(dx * 100, 1), "dy_cm": round(dy * 100, 1),
-                              "yaw_deg": round(float(np.degrees(dyaw)), 1), "mass_x": round(k, 2)}
-        fk = rng.uniform(1 - friction_scale, 1 + friction_scale)
-
-        def tweak(m, fk=fk):
-            for g in range(m.ngeom):
-                if m.body(m.geom_bodyid[g]).name.startswith(OBJ_PREFIX):
-                    m.geom_friction[g, 0] *= fk
-
-        b = build.model_copy(update={"objects": objs})
+        b, tweak, change = perturb(build, rng, pos_jitter, yaw_jitter, mass_scale, friction_scale)
+        fk = change.pop("_friction_x")
         try:
             sim = _Sim(b, None, tweak=tweak)
         except SceneError:
             continue  # jitter made two objects overlap: draw again
         err = _execute(sim, b)
-        res = [check_goal(sim.scene, sim.d, g, sim.ctl.held) for g in goals]
+        res = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
         ok = err is None and all(r.ok for r in res)
         for i, r in enumerate(res):
             goal_pass[i] += r.ok
-        rows.append({"ok": ok, "error": err, "friction_x": round(fk, 2), "objects": change,
+        rows.append({"ok": ok, "error": err, "friction_x": fk, "objects": change,
                      "failed": [r.detail for r in res if not r.ok]})
     n = len(rows)
     return {"trials": n, "passed": sum(r["ok"] for r in rows),

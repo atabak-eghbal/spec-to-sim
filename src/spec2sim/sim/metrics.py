@@ -29,7 +29,9 @@ def _half_h(scene: Scene, name: str) -> float:
     return scene.objects[name].size[2] / 2
 
 
-def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None) -> GoalResult:
+def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None,
+               peaks: dict[str, float] | None = None) -> GoalResult:
+    """peaks: highest resting height of each loose object during the run (for 'toppled')."""
     def pos(n: str) -> np.ndarray:
         return data.body(OBJ_PREFIX + n).xpos
 
@@ -53,14 +55,19 @@ def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None) -> 
 
     if g.type == "toppled":
         o = scene.objects[g.obj]
-        up = data.body(OBJ_PREFIX + g.obj).xmat.reshape(3, 3)[:, 2]
-        tilt = float(np.degrees(np.arccos(np.clip(up[2], -1, 1))))
-        drop = o.pos[2] - float(p[2])
-        tipped = o.shape != "sphere" and tilt >= TOPPLE_TILT
-        ok = tipped or drop >= o.size[2] / 2
-        return GoalResult(goal=g, ok=ok, error_m=0.0 if ok else o.size[2] / 2 - drop,
-                          detail=f"{g.obj} tilted {tilt:.0f} deg and dropped {drop * 100:.1f} cm from its start "
-                                 f"(toppled = tilt >= {TOPPLE_TILT:.0f} deg or drop >= {o.size[2] / 2 * 100:.1f} cm)")
+        R = data.body(OBJ_PREFIX + g.obj).xmat.reshape(3, 3)
+        if o.shape == "box":  # a box that rolled onto another face still rests flat
+            tilt = float(np.degrees(np.arccos(np.clip(np.max(np.abs(R[2, :])), -1, 1))))
+        else:
+            tilt = float(np.degrees(np.arccos(np.clip(R[2, 2], -1, 1))))
+        peak = (peaks or {}).get(g.obj, o.pos[2])
+        drop = peak - float(p[2])
+        tipped = o.shape == "cylinder" and tilt >= TOPPLE_TILT or o.shape == "box" and tilt >= 20
+        ok = (tipped or drop >= o.size[2] / 2) and held != g.obj
+        return GoalResult(goal=g, ok=ok, error_m=0.0 if ok else max(0.0, o.size[2] / 2 - drop),
+                          detail=f"{g.obj} is {drop * 100:.1f} cm below the highest point it rested at"
+                                 f"{f' and leans {tilt:.0f} deg' if tipped else ''} (toppled = fell at least "
+                                 f"{o.size[2] / 2 * 100:.1f} cm or tipped over){held_note}")
 
     if g.type == "inside" and scene.objects[g.target].shape == "drawer":
         t = scene.objects[g.target]

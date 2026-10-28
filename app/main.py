@@ -29,8 +29,9 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from spec2sim.llm import BudgetError, check_budget
-from spec2sim.loop import RUNS, run_task
-from spec2sim.schemas import Build
+from spec2sim.loop import RUNS, _public, run_task
+from spec2sim.schemas import Build, Goal
+from spec2sim.sim import runner
 from spec2sim.sim.scene import build_scene, objects_mjcf
 from spec2sim.sim.webviz import export_meshes
 
@@ -247,6 +248,97 @@ def export(run_id: str, attempt: int | None = None) -> Response:
             result="succeeded" if res and res["success"] else "failed"))
     return Response(buf.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="spec2sim-{run_id}-attempt{attempt}.zip"'})
+
+
+class TryRequest(BaseModel):
+    attempt: int
+    moves: dict[str, tuple[float, float]] = Field(default_factory=dict, max_length=8)
+
+
+_try_lock = threading.Lock()
+
+
+@app.post("/api/runs/{run_id}/try")
+def try_it(run_id: str, req: TryRequest) -> dict:
+    """'Try to break it': re-run a saved plan with objects moved to new (x, y) spots.
+    Physics only, no model calls; the plan's steps are relative to objects, so it adapts."""
+    events = _live[run_id].events if run_id in _live else _saved(run_id)
+    if not events:
+        raise HTTPException(404, "run not found")
+    done = lambda step: [e for e in events if e.get("step") == step and e.get("status") == "done"]
+    task = done("planner")[0]["data"] if done("planner") else None
+    builds = {e["attempt"]: e["data"] for e in done("builder") + done("repair")}
+    if not task or req.attempt not in builds:
+        raise HTTPException(404, "attempt not found")
+    b = Build(**builds[req.attempt])
+    objs = []
+    for o in b.objects:
+        if o.name in req.moves:
+            x, y = req.moves[o.name]
+            o = o.model_copy(update={"pos": (round(x, 4), round(y, 4), o.pos[2])})
+        objs.append(o)
+    b = b.model_copy(update={"objects": objs})
+    goals = [Goal(**g) for g in task["goals"]]
+    with _try_lock:  # one at a time: it's CPU work on the web server
+        n = len(list((RUNS / run_id).glob("try*"))) + 1
+        r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects})
+    return {"try": n, "attempt": req.attempt, "result": _public(r, run_id)}
+
+
+class DatasetRequest(BaseModel):
+    episodes: int = Field(20, ge=5, le=50)
+
+
+_datasets: dict[str, dict] = {}
+
+
+@app.post("/api/runs/{run_id}/dataset")
+def make_dataset(run_id: str, req: DatasetRequest) -> dict:
+    """Training data from a solved task: N successful perturbed demonstrations in LeRobot v2.1
+    layout (parquet + mp4), generated in the background with physics only (no model calls)."""
+    job = _datasets.get(run_id)
+    if job and job["state"] == "running":
+        return job
+    events = _live[run_id].events if run_id in _live else _saved(run_id)
+    if not events:
+        raise HTTPException(404, "run not found")
+    done = lambda step: [e for e in events if e.get("step") == step and e.get("status") == "done"]
+    ok = [e["attempt"] for e in done("runner") if e["data"]["success"]]
+    if not ok:
+        raise HTTPException(409, "only solved tasks can generate training data")
+    builds = {e["attempt"]: e["data"] for e in done("builder") + done("repair")}
+    task = done("planner")[0]["data"]
+    prompt = next((e.get("prompt") for e in events if e["type"] == "start"), task["summary"])
+    job = {"state": "running", "done": 0, "total": req.episodes, "tried": 0, "result": None, "error": None}
+    _datasets[run_id] = job
+
+    def work():
+        from spec2sim.sim.dataset import generate
+        def progress(k, n, tried):
+            job.update(done=k, tried=tried)
+        try:
+            with _try_lock:
+                out = RUNS / run_id / f"dataset_{req.episodes}"
+                res = generate(Build(**builds[ok[-1]]), [Goal(**g) for g in task["goals"]], prompt, out,
+                               episodes=req.episodes, progress=progress)
+            res["zip"] = str(Path(res["zip"]).relative_to(RUNS))
+            job.update(state="done", result=res, done=res["episodes"])
+        except Exception as e:  # noqa: BLE001 - report any failure to the UI
+            traceback.print_exc()
+            job.update(state="error", error=f"{type(e).__name__}: {e}")
+
+    threading.Thread(target=work, daemon=True).start()
+    return job
+
+
+@app.get("/api/runs/{run_id}/dataset")
+def dataset_status(run_id: str) -> dict:
+    job = _datasets.get(run_id)
+    if job:
+        return job
+    for z in sorted((RUNS / run_id).glob("dataset_*.zip")) if "/" not in run_id else []:
+        return {"state": "done", "result": {"zip": str(z.relative_to(RUNS)), "episodes": None}}
+    return {"state": "none"}
 
 
 @app.get("/healthz")

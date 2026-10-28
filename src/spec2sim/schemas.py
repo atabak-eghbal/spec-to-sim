@@ -80,6 +80,9 @@ class TaskSpec(BaseModel):
                 raise ValueError(f"'inside' goal target '{g.target}' must be an object with shape 'bin' or 'drawer'")
             if g.type in ("opened", "closed") and g.obj not in drawers:
                 raise ValueError(f"'{g.type}' goal needs obj to be a 'drawer' object, got '{g.obj}'")
+            if g.type == "toppled" and any(h.type in ("on", "upright") and h.obj == g.obj for h in self.goals):
+                raise ValueError(f"'{g.obj}' must end both toppled and on/upright; goals describe only the FINAL "
+                                 "state (stack-then-knock-over ends with the upper objects toppled, no 'on' goals)")
             if g.type == "opened" and any(h.type == "closed" and h.obj == g.obj for h in self.goals):
                 raise ValueError(f"'{g.obj}' has both 'opened' and 'closed' goals; goals describe only the FINAL "
                                  "state (for 'open it, put X in, close it' use inside + closed)")

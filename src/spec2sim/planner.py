@@ -36,7 +36,8 @@ Goals are checked numerically at the end of the simulation:
 - upright: {"type":"upright", "obj":A}            A is not tipped over (for cans, bottles, cups)
 - left_of / right_of / in_front_of / behind: {"type":"left_of", "obj":A, "target":B}
           A ends on that side of B, from the robot's point of view (in front = farther from robot)
-- toppled: {"type":"toppled", "obj":A}            A ends knocked over or knocked down from where it started
+- toppled: {"type":"toppled", "obj":A}            A ends knocked down: lower than the highest point it
+          rested at (e.g. the upper blocks of a stack). The bottom object of a stack cannot topple.
 - opened / closed: {"type":"opened", "obj":D}     drawer D ends pulled open / pushed shut
   "inside" also works with a drawer as target ("put the cube in the drawer").
 A task with several objects needs one goal per object (e.g. sorting 3 items = 3 "inside" goals).

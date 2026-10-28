@@ -18,6 +18,7 @@ dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "sse-starlette>=2.1",
+  "pyarrow>=26.0.0",
 ]
 
 [dependency-groups]

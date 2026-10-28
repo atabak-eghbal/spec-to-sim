@@ -169,3 +169,37 @@ def test_stress_test_separates_good_and_bad_plans():
     bad = stress_test(Build(objects=_cubes(), plan=_stack_plan(0.18, place_dx=0.03), rationale="drops"), ON, trials=6)
     assert good["trials"] == 6 and good["passed"] == 6
     assert bad["passed"] == 0
+
+
+def test_dataset_lerobot_layout(tmp_path: Path):
+    import json
+
+    import pyarrow.parquet as pq
+
+    from spec2sim.sim.dataset import FPS, generate
+    res = generate(Build(objects=_cubes(), plan=_stack_plan(C + 0.003), rationale="reference"), ON,
+                   "stack a on b", tmp_path / "ds", episodes=2, images=False)
+    assert res["episodes"] == 2 and Path(res["zip"]).exists()
+    info = json.loads((tmp_path / "ds/meta/info.json").read_text())
+    assert info["codebase_version"] == "v2.1" and info["total_episodes"] == 2 and info["fps"] == FPS
+    t = pq.read_table(tmp_path / "ds/data/chunk-000/episode_000000.parquet")
+    assert {"observation.state", "action", "observation.environment_state", "timestamp", "frame_index"} <= set(t.column_names)
+    ts = t.column("timestamp").to_pylist()
+    assert abs(ts[1] - ts[0] - 1 / FPS) < 1e-6  # LeRobot checks exact 1/fps spacing
+    assert len(t.column("observation.state")[0]) == 9 and len(t.column("action")[0]) == 8
+
+
+def test_toppled_counts_falls_after_stacking(tmp_path: Path):
+    # a is stacked on b (it rests up there), then swept off: 'toppled' must see that fall,
+    # even though a ends no lower than where it started on the floor.
+    z = C + C / 2  # a's center when stacked
+    knock = [Action(op="close", duration=0.3),
+             Action(op="move_to", xyz=(0.5, -0.03, 0.2), duration=0.8),
+             Action(op="move_to", xyz=(0.5, -0.03, z), duration=0.6),
+             Action(op="move_to", xyz=(0.5, -0.32, z), duration=0.45)]
+    plan = MotionPlan(actions=[*_stack_plan(C + 0.003).actions, *knock])
+    r = run(Build(objects=_cubes(), plan=plan, rationale="stack then knock"), [Goal(type="toppled", obj="a")], tmp_path)
+    assert r.success, (r.goals, r.events)
+    stacked = run(Build(objects=_cubes(), plan=_stack_plan(C + 0.003), rationale="only stack"),
+                  [Goal(type="toppled", obj="a")], tmp_path / "s")
+    assert not stacked.success

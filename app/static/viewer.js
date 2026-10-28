@@ -201,7 +201,7 @@ export class SimViewer {
     this.#ui();
     this.root = new THREE.Group();
     this.scene.add(this.root);
-    this.playing = true; this.t = 0; this.speed = 1; this.last = performance.now(); this.style = "realistic";
+    this.playing = true; this.t = 0; this.speed = 1; this.last = performance.now(); this.style = "realistic"; this.followers = []; this.master = null; this.ghost = null;
     new ResizeObserver(() => this.#resize()).observe(this.el);
     this.#resize();
     this.renderer.setAnimationLoop(() => this.#tick());
@@ -255,7 +255,9 @@ export class SimViewer {
       <div class="v-track"><input type="range" min="0" max="1000" value="0" aria-label="Timeline"><div class="v-marks"></div></div>
       <span class="v-time mono">0.0 s</span>
       <button type="button" class="v-speed" aria-label="Playback speed">1×</button>
-      <button type="button" class="v-style" aria-label="Switch between realistic and plain objects">Realistic</button>`;
+      <button type="button" class="v-style" aria-label="Switch between realistic and plain objects">Realistic</button>
+      <button type="button" class="v-edit" hidden title="Drag objects to new spots, then re-run the same plan">Move objects</button>
+      <button type="button" class="v-full" aria-label="Full screen" title="Full screen">⛶</button>`;
     this.el.appendChild(bar);
     this.caption = label("");
     this.el.appendChild(this.caption);
@@ -271,6 +273,22 @@ export class SimViewer {
       this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 0.5 : 1;
       e.target.textContent = `${this.speed}×`;
     };
+    bar.querySelector(".v-full").onclick = () => {
+      const target = this.el.closest(".screen") || this.el;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else target.requestFullscreen?.();
+    };
+    this.editBtn = bar.querySelector(".v-edit");
+    this.editBtn.onclick = () => (this.editing ? this.stopEdit() : this.startEdit());
+    this.editBar = document.createElement("div");
+    this.editBar.className = "v-editbar";
+    this.editBar.hidden = true;
+    this.editBar.innerHTML = `<span>Drag objects on the bench. The plan is not changed, only where things start.</span>
+      <button type="button" class="v-reset">Reset</button><button type="button" class="v-rerun">Re-run ▶</button>`;
+    this.el.appendChild(this.editBar);
+    this.editBar.querySelector(".v-reset").onclick = () => { this.moves = {}; this.#pose(0); this.#syncRerun(); };
+    this.editBar.querySelector(".v-rerun").onclick = () => this.#rerun();
+    this.#dragSetup();
     this.styleBtn = bar.querySelector(".v-style");
     this.styleBtn.onclick = () => this.setStyle(this.style === "realistic" ? "plain" : "realistic");
     this.range.oninput = () => { this.t = (this.range.value / 1000) * this.duration; this.setPlaying(false); };
@@ -297,7 +315,8 @@ export class SimViewer {
     this.nb = meta.bodies.length;
     this.duration = meta.times.length ? meta.times[meta.times.length - 1] : 0;
     this.root.clear();
-    this.bodies = meta.bodies.map(() => { const g = new THREE.Group(); this.root.add(g); return g; });
+    this.bodies = meta.bodies.map((name) => { const g = new THREE.Group(); g.userData.body = name; this.root.add(g); return g; });
+    if (this.editing) this.stopEdit();
     this.#build();
 
     this.events = (meta.events || []).map((e) => {
@@ -360,6 +379,132 @@ export class SimViewer {
     }
   }
 
+  // ---------- "Try to break it": drag objects, re-run the same plan (physics only) ----------
+  enableTry(onTry) { this.onTry = onTry; this.editBtn.hidden = !onTry; }
+
+  startEdit() {
+    if (!this.meta) return;
+    this.editing = true; this.moves = {};
+    this.setPlaying(false); this.t = 0; this.#pose(0);
+    this.editBar.hidden = false; this.editBtn.textContent = "Cancel";
+    this.goalLayer.style.display = "none";
+    this.#syncRerun();
+  }
+
+  stopEdit() {
+    this.editing = false; this.editBar.hidden = true; this.editBtn.textContent = "Move objects";
+    this.goalLayer.style.display = "";
+    this.renderer.domElement.style.cursor = "";
+  }
+
+  #syncRerun() {
+    const n = Object.keys(this.moves || {}).length;
+    const b = this.editBar.querySelector(".v-rerun");
+    b.disabled = !n || this.busy;
+    b.textContent = this.busy ? "Simulating…" : n ? `Re-run with ${n} moved ▶` : "Re-run ▶";
+  }
+
+  async #rerun() {
+    if (!this.onTry || this.busy) return;
+    this.busy = true; this.#syncRerun();
+    try { await this.onTry({ ...this.moves }); this.stopEdit(); }
+    catch (e) { this.editBar.querySelector("span").textContent = String(e.message || e); }
+    finally { this.busy = false; this.#syncRerun(); }
+  }
+
+  #dragSetup() {
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const hit = new THREE.Vector3();
+    const dom = this.renderer.domElement;
+    const at = (ev) => { const r = dom.getBoundingClientRect(); ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, this.camera); };
+    const bodyName = (obj) => { while (obj && !obj.userData.body) obj = obj.parent; return obj ? obj.userData.body : null; };
+    dom.addEventListener("pointerdown", (ev) => {
+      if (!this.editing) return;
+      at(ev);
+      const groups = this.bodies.filter((g) => g.userData.body && g.userData.body.startsWith("obj/") && !g.userData.body.endsWith("/drawer"));
+      const h = ray.intersectObjects(groups, true)[0];
+      if (!h) return;
+      const name = bodyName(h.object).slice(4);
+      const g = this.bodies.find((b) => b.userData.body === "obj/" + name);
+      plane.constant = -g.position.z;
+      ray.ray.intersectPlane(plane, hit);
+      this.drag = { name, g, child: this.bodies.find((b) => b.userData.body === `obj/${name}/drawer`),
+                    off: g.position.clone().sub(hit) };
+      this.controls.enabled = false;
+      dom.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    });
+    dom.addEventListener("pointermove", (ev) => {
+      if (!this.editing) return;
+      at(ev);
+      if (!this.drag) {
+        const groups = this.bodies.filter((g) => g.userData.body && g.userData.body.startsWith("obj/"));
+        dom.style.cursor = ray.intersectObjects(groups, true).length ? "grab" : "";
+        return;
+      }
+      if (!ray.ray.intersectPlane(plane, hit)) return;
+      const { g, child, off } = this.drag;
+      const nx = hit.x + off.x, ny = hit.y + off.y;
+      if (child) { child.position.x += nx - g.position.x; child.position.y += ny - g.position.y; }
+      g.position.x = nx; g.position.y = ny;
+      dom.style.cursor = "grabbing";
+    });
+    dom.addEventListener("pointerup", () => {
+      if (!this.drag) return;
+      const { name, g } = this.drag;
+      this.moves[name] = [Math.round(g.position.x * 1000) / 1000, Math.round(g.position.y * 1000) / 1000];
+      this.drag = null; this.controls.enabled = true; this.#syncRerun();
+    });
+  }
+
+  // Compare view: this viewer mirrors `master`'s clock and camera (master loops over the longer run).
+  follow(master) {
+    this.master = master;
+    if (!master.followers.includes(this)) master.followers.push(this);
+    this.el.querySelector(".v-bar").style.display = "none";
+  }
+
+  unfollow() {
+    if (this.master) this.master.followers = this.master.followers.filter((f) => f !== this);
+    this.master = null;
+    this.el.querySelector(".v-bar").style.display = "";
+  }
+
+  // Ghost: another attempt's objects drawn translucent in this scene, on the same clock.
+  async setGhost(url) {
+    if (this.ghostRoot) { this.scene.remove(this.ghostRoot); this.ghostRoot = null; }
+    this.ghost = null;
+    if (!url) return;
+    const base = url.slice(0, url.lastIndexOf("/") + 1);
+    const [meta, buf] = await Promise.all([fetch(url).then((r) => r.json()), fetch(base + "traj.bin").then((r) => r.arrayBuffer())]);
+    const root = new THREE.Group();
+    const bodies = meta.bodies.map(() => { const g = new THREE.Group(); root.add(g); return g; });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff6b4a, transparent: true, opacity: 0.32, roughness: 0.6, depthWrite: false });
+    for (const g of meta.geoms) {
+      if (!g.object || g.type === "mesh") continue;
+      const isBin = meta.geoms.filter((x) => x.body === g.body).length > 1;
+      if (isBin && !/\/drawer$/.test(meta.bodies[g.body])) continue; // furniture doesn't move: skip
+      const m = new THREE.Mesh(primitive(g), mat);
+      m.position.set(...g.pos); m.quaternion.copy(quat(g.quat));
+      bodies[g.body].add(m);
+    }
+    this.scene.add(root);
+    this.ghostRoot = root;
+    this.ghost = { meta, traj: new Float32Array(buf), bodies, nb: meta.bodies.length,
+                   duration: meta.times[meta.times.length - 1] || 0 };
+  }
+
+  #poseGhost(t) {
+    const gh = this.ghost, times = gh.meta.times;
+    let lo = 0, hi = times.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (times[mid] <= t) lo = mid; else hi = mid - 1; }
+    for (let i = 0; i < gh.nb; i++) {
+      const o = (lo * gh.nb + i) * 7, tr = gh.traj;
+      gh.bodies[i].position.set(tr[o], tr[o + 1], tr[o + 2]);
+      gh.bodies[i].quaternion.set(tr[o + 4], tr[o + 5], tr[o + 6], tr[o + 3]);
+    }
+  }
+
   setStyle(style) {
     if (style === this.style) return;
     this.style = style;
@@ -387,20 +532,28 @@ export class SimViewer {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
+    if (this.master) {  // compare view: time and camera follow the master viewer
+      this.t = this.master.t;
+      this.camera.position.copy(this.master.camera.position);
+      this.camera.quaternion.copy(this.master.camera.quaternion);
+      this.controls.target.copy(this.master.controls.target);
+    }
     if (this.meta && this.meta.times.length) {
-      if (this.playing) {
+      if (this.playing && !this.master) {
         this.t += dt * this.speed;
-        if (this.t > this.duration + 1.2) this.t = 0; // short hold on the final state, then loop
+        const span = Math.max(this.duration, ...this.followers.map((f) => f.duration || 0));
+        if (this.t > span + 1.6) this.t = 0; // hold on the final state, then loop
       }
       const t = Math.min(this.t, this.duration);
-      this.#pose(this.#frameAt(t));
+      if (!this.editing) this.#pose(this.#frameAt(t));
+      if (this.ghost) this.#poseGhost(Math.min(this.t, this.ghost.duration));
       this.range.value = Math.round((1000 * t) / Math.max(this.duration, 0.01));
       this.timeEl.textContent = `${t.toFixed(1)} s`;
       const recent = this.events.filter((e) => e.t <= t && t - e.t < 1.6).pop();
       this.caption.textContent = recent ? recent.text.replace(/: center at .*$/, "") : "";
       this.caption.style.opacity = recent ? 1 : 0;
     }
-    this.controls.update();
+    if (!this.master) this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.#placeGoals();
   }
@@ -437,6 +590,8 @@ export class SimViewer {
   }
 
   dispose() {
+    this.unfollow();
+    for (const f of this.followers) f.master = null;
     this.renderer.setAnimationLoop(null);
     this.renderer.dispose();
   }

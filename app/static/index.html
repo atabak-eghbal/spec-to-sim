@@ -139,12 +139,44 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .v-goal { position: absolute; left: 0; top: 0; font: 500 0.74rem/1 var(--mono); padding: 0.3rem 0.5rem; border-radius: 99px; white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
 .v-goal.ok { background: #e1f1e6; color: #1f5c39; } .v-goal.bad { background: #f7e4df; color: #8f3420; }
+.cascade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; position: relative; }
+.node { position: relative; padding: 0.55rem 0.6rem 0.6rem; border: 1px solid var(--rule); background: var(--sheet); margin-right: 14px;
+  border-radius: 6px; display: grid; gap: 0.25rem; min-width: 0; transition: border-color .3s, box-shadow .3s; }
+.node:not(:last-child)::after { content: ""; position: absolute; right: -15px; top: 50%; width: 14px; height: 2px; background: var(--rule); }
+.node.done:not(:last-child)::after { background: var(--ok); }
+.node .nm { font: 700 0.9rem/1 var(--display); font-stretch: 85%; display: flex; gap: 0.35rem; align-items: center; white-space: nowrap; }
+.node .md { font: 500 0.66rem/1.2 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .mt { font: 500 0.72rem/1 var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; min-height: 0.75rem; }
+.node .cnt { font: 500 0.66rem/1 var(--mono); background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 0.15rem 0.4rem; }
+.node.idle { opacity: 0.55; }
+.node.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: pulse 1.2s ease-in-out infinite; }
+.node.done { border-color: color-mix(in srgb, var(--ok) 55%, var(--rule)); }
+.node.fail { border-color: var(--bad); }
+.node.esc { border-color: var(--m-ultra); box-shadow: 0 0 0 3px var(--bad-soft); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
+@media (prefers-reduced-motion: reduce) { .node.active { animation: none; } }
+@media (max-width: 900px) { .cascade { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 0.5rem; } .node::after { display: none; } }
+.cmp { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #0d141a; }
+.cmp .pane { position: relative; min-width: 0; }
+.cmp .pane > .viewer { position: absolute; inset: 0; }
+.cmp .pane .verdict { z-index: 3; }
+.cmp .pane .v-caption.v-hint { display: none; }
+.ghost-btn[aria-pressed="true"] { background: #ec8a72 !important; color: #15212b !important; }
+.screen:fullscreen { aspect-ratio: auto; border-radius: 0; }
+.v-editbar { position: absolute; left: 0.8rem; right: 0.8rem; top: 0.7rem; display: flex; gap: 0.6rem; align-items: center;
+  background: rgba(10,15,20,0.82); color: #e3eaef; padding: 0.5rem 0.7rem; border-radius: 6px; font: 400 0.82rem/1.3 var(--body); z-index: 4; }
+.v-editbar span { flex: 1; }
+.v-editbar button { border: 0; border-radius: 4px; padding: 0.4rem 0.7rem; font: 600 0.8rem/1 var(--mono); cursor: pointer; background: rgba(255,255,255,0.14); color: inherit; }
+.v-editbar .v-rerun { background: #6fc38f; color: #0d1318; }
+.v-editbar .v-rerun:disabled { opacity: 0.5; cursor: default; }
+.v-bar .v-edit { background: rgba(127,176,224,0.28); }
 .modes { margin-left: auto; display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
 .modes button { border: 0; background: var(--sheet); padding: 0.3rem 0.65rem; font: 500 0.75rem/1 var(--mono); cursor: pointer; color: var(--muted); }
 .modes button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .tabs-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .tab { border: 1px solid var(--rule); background: var(--sheet); border-radius: 3px; padding: 0.35rem 0.7rem; font: 500 0.78rem/1 var(--mono); cursor: pointer; display: flex; gap: 0.4rem; align-items: center; }
+.tab.try { border-style: dashed; }
 .tab[aria-selected="true"] { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); }
 .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
@@ -170,6 +202,8 @@ body.theater .screen { position: fixed; inset: 0; aspect-ratio: auto; border-rad
 .export { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
 .export-btn { border: 1.5px solid var(--ink); color: var(--ink); border-radius: 4px; padding: 0.4rem 0.8rem; text-decoration: none;
   font: 700 0.85rem/1 var(--display); font-stretch: 88%; white-space: nowrap; }
+button.export-btn { background: none; cursor: pointer; }
+button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 .export-btn:hover { background: var(--ink); color: var(--paper); }
 </style>
 </head>
@@ -198,6 +232,8 @@ body.theater .screen { position: fixed; inset: 0; aspect-ratio: auto; border-rad
     <div class="chips" id="featured" hidden><span class="label">Recorded runs</span></div>
   </section>
 
+  <div class="cascade" id="cascade" aria-label="Model cascade"></div>
+
   <div class="split">
     <section aria-label="Pipeline steps">
       <div class="timeline" id="timeline">
@@ -210,13 +246,17 @@ body.theater .screen { position: fixed; inset: 0; aspect-ratio: auto; border-rad
 
     <aside class="stage" aria-label="Simulation">
       <div class="tabs-row"><div class="tabs" id="tabs" role="tablist"></div>
-        <div class="modes" id="modes" hidden><button type="button" data-mode="3d">3D</button><button type="button" data-mode="video">Video</button></div></div>
+        <div class="modes" id="modes" hidden><button type="button" id="ghost-btn" class="ghost-btn" hidden title="Show the first failed attempt's objects as red ghosts">Ghost of failure</button><button type="button" data-mode="3d">3D</button><button type="button" data-mode="compare">Before / after</button><button type="button" data-mode="video">Video</button></div></div>
       <div class="screen" id="screen"><div class="idle">Each attempt replays here in 3D. Drag to look around.</div></div>
       <div class="goals" id="goals"></div>
       <div class="robust-line" id="robust" hidden></div>
       <div class="export" id="export" hidden>
         <a id="export-link" class="export-btn" href="#" download>Export scene</a>
         <span>MuJoCo scene, success checks and motion plan as a zip, ready to test your own robot policy.</span>
+      </div>
+      <div class="export" id="dataset" hidden>
+        <button type="button" id="dataset-btn" class="export-btn">Generate training data</button>
+        <span id="dataset-msg">20 successful demonstrations with varied starts, in LeRobot format (the format NVIDIA GR00T trains on). Physics only, no model cost.</span>
       </div>
       <div class="totals">
         <div class="tot"><span class="label">Result</span><b id="t-result">—</b></div>
@@ -321,39 +361,139 @@ function stepBody(s) {
   return "";
 }
 
-// 3D replay (viewer.js) when the attempt has one, otherwise the MP4. One viewer is reused.
-let viewer = null, viewMode = "3d";
+// Stage views: "3d" (one attempt), "compare" (first failed attempt beside the final one, same clock
+// and camera), "video" (server MP4). ?view=compare and ?ghost=1 preselect for links and video capture.
+const qs0 = new URL(location).searchParams;
+let viewer = null, cmp = null, viewMode = qs0.get("view") === "compare" ? "compare" : "3d", ghostOn = qs0.get("ghost") === "1";
+const attemptNums = () => Object.keys(state.attempts).map(Number).filter((n) => n < 1000).sort((a, b) => a - b);
+function compareSet() {
+  const nums = attemptNums().filter((n) => state.attempts[n].viz_path);
+  const fail = nums.find((n) => !state.attempts[n].success);
+  const ok = [...nums].reverse().find((n) => state.attempts[n].success);
+  return fail !== undefined && ok !== undefined && fail < ok ? [fail, ok] : null;
+}
+function disposeViews() {
+  if (viewer) { viewer.dispose(); viewer = null; }
+  if (cmp) { cmp.left.dispose(); cmp.right.dispose(); cmp = null; }
+}
+const verdictHtml = (n, r, extra = "") => `<span class="verdict pill ${r.success ? "p-ok" : "p-bad"}">${extra}${n > 1000 ? `your test ${n - 1000}` : `attempt ${n}`}: ${r.success ? "success" : "failed"}</span>`;
+
 function renderScreen(r) {
   const screen = $("screen");
-  const has3d = r && r.viz_path && window.SimViewer;
-  const mode = has3d && (viewMode === "3d" || !r.video_path) ? "3d" : r && r.video_path ? "video" : null;
+  const ready = !!window.SimViewer;
+  const pair = ready ? compareSet() : null;
+  let mode = null;
+  if (r && viewMode === "compare" && pair) mode = "compare";
+  else if (r && r.viz_path && ready && (viewMode !== "video" || !r.video_path)) mode = "3d";
+  else if (r && r.video_path) mode = "video";
+  const avail = { "3d": !!(r && r.viz_path && ready), compare: !!pair, video: !!(r && r.video_path) };
   const modes = $("modes");
-  modes.hidden = !(r && r.viz_path && r.video_path && window.SimViewer);
-  for (const b of modes.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
-  const verdict = r ? `<span class="verdict pill ${r.success ? "p-ok" : "p-bad"}">attempt ${state.selected}: ${r.success ? "success" : "failed"}</span>` : "";
+  modes.hidden = Object.values(avail).filter(Boolean).length < 2;
+  for (const b of modes.querySelectorAll("button[data-mode]")) {
+    b.hidden = !avail[b.dataset.mode];
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  }
+  const ghostBtn = $("ghost-btn");
+  const firstFail = pair ? pair[0] : null;
+  ghostBtn.hidden = !(mode === "3d" && firstFail !== null && state.selected !== firstFail);
+  ghostBtn.setAttribute("aria-pressed", String(ghostOn));
+
+  if (mode === "compare") {
+    const [a, b] = pair;
+    const key = `${state.runId}:${a}:${b}`;
+    if (!cmp || cmp.key !== key) {
+      disposeViews();
+      screen.innerHTML = `<div class="cmp"><div class="pane" id="pane-a"></div><div class="pane" id="pane-b"></div></div>`;
+      const left = new window.SimViewer($("pane-a")), right = new window.SimViewer($("pane-b"));
+      if (pendingStyle) { left.setStyle(pendingStyle); right.setStyle(pendingStyle); pendingStyle = null; }
+      left.follow(right);
+      left.load("/media/" + state.attempts[a].viz_path);
+      right.load("/media/" + state.attempts[b].viz_path);
+      $("pane-a").insertAdjacentHTML("beforeend", verdictHtml(a, state.attempts[a], "before · "));
+      $("pane-b").insertAdjacentHTML("beforeend", verdictHtml(b, state.attempts[b], "after · "));
+      cmp = { key, left, right };
+    }
+    return;
+  }
   if (mode === "3d") {
+    if (cmp) disposeViews();
     let host = screen.querySelector(".viewer");
     if (!host) {
+      disposeViews();
       screen.innerHTML = "";
       host = document.createElement("div");
       screen.appendChild(host);
       viewer = new window.SimViewer(host);
     }
     screen.querySelector(".verdict")?.remove();
-    screen.insertAdjacentHTML("beforeend", verdict);
+    screen.insertAdjacentHTML("beforeend", verdictHtml(state.selected, r));
     if (pendingStyle) { viewer.setStyle(pendingStyle); pendingStyle = null; }
     viewer.load("/media/" + r.viz_path);
+    viewer.enableTry(state.done && state.selected < TRY && state.attempts[state.selected].success !== undefined ? tryIt : null);
+    const ghostUrl = !ghostBtn.hidden && ghostOn ? "/media/" + state.attempts[firstFail].viz_path : null;
+    if (viewer.ghostUrl !== ghostUrl) { viewer.ghostUrl = ghostUrl; viewer.setGhost(ghostUrl); }
   } else if (mode === "video") {
     const src = "/media/" + r.video_path;
     const v = screen.querySelector("video");
     if (!v || v.getAttribute("src") !== src) {
-      if (viewer) { viewer.dispose(); viewer = null; }
-      screen.innerHTML = `<video src="${esc(src)}" autoplay muted loop playsinline controls></video>${verdict}`;
+      disposeViews();
+      screen.innerHTML = `<video src="${esc(src)}" autoplay muted loop playsinline controls></video>${verdictHtml(state.selected, r)}`;
     }
   } else if (r && r.error) {
-    if (viewer) { viewer.dispose(); viewer = null; }
+    disposeViews();
     screen.innerHTML = `<div class="idle">Nothing to replay: ${esc(r.error)}</div>`;
   }
+}
+
+// Training data: N successful perturbed demonstrations in LeRobot format, generated on the server.
+let dsRun = null, dsTimer = null;
+function dsReset() {
+  clearInterval(dsTimer);
+  $("dataset-btn").disabled = false;
+  $("dataset-btn").textContent = "Generate training data";
+  $("dataset-msg").textContent = "20 successful demonstrations with varied starts, in LeRobot format (the format NVIDIA GR00T trains on). Physics only, no model cost.";
+}
+function dsShow(j) {
+  if (j.state === "running") {
+    $("dataset-btn").disabled = true;
+    $("dataset-btn").textContent = `Generating… ${j.done}/${j.total}`;
+    $("dataset-msg").textContent = `Re-running the plan with random starts, masses and friction; keeping only successful episodes (${j.tried} tried).`;
+  } else if (j.state === "done") {
+    clearInterval(dsTimer);
+    const r = j.result;
+    $("dataset-btn").disabled = false;
+    $("dataset-btn").textContent = "Generate again";
+    $("dataset-msg").innerHTML = `<a href="/media/${esc(r.zip)}" download>Download dataset</a>${r.episodes ? ` · ${r.episodes} episodes from ${r.tried} tries, ${r.frames} frames at ${r.fps} fps, ${r.seconds} s` : ""}`;
+  } else if (j.state === "error") {
+    clearInterval(dsTimer); dsReset();
+    $("dataset-msg").textContent = "Failed: " + j.error;
+  }
+}
+$("dataset-btn").addEventListener("click", async () => {
+  const id = state.runId;
+  const r = await fetch(`/api/runs/${encodeURIComponent(id)}/dataset`, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ episodes: 20 }) });
+  const j = await r.json();
+  if (!r.ok) { $("dataset-msg").textContent = j.detail || r.statusText; return; }
+  dsShow(j);
+  clearInterval(dsTimer);
+  dsTimer = setInterval(async () => {
+    if (state.runId !== id) return clearInterval(dsTimer);
+    dsShow(await (await fetch(`/api/runs/${encodeURIComponent(id)}/dataset`)).json());
+  }, 1000);
+});
+
+// "Try to break it": re-run the selected attempt's plan with dragged objects (no model calls).
+async function tryIt(moves) {
+  const base = state.selected;
+  const r = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/try`, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attempt: base, moves }) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail || r.statusText);
+  if (d.result.error && !d.result.viz_path) throw new Error(d.result.error);
+  state.attempts[TRY + d.try] = d.result;
+  state.selected = TRY + d.try;
+  renderStage();
 }
 
 function renderTimeline() {
@@ -398,19 +538,25 @@ function runningText(s) {
   }[s.step] || "Working…";
 }
 
+const TRY = 1000; // "Your test N" results are stored as attempt TRY + N
 function renderStage() {
-  const nums = Object.keys(state.attempts).map(Number).sort((a, b) => a - b);
-  $("tabs").innerHTML = nums.map((n) => {
+  const all = Object.keys(state.attempts).map(Number).sort((a, b) => a - b);
+  const nums = all.filter((n) => n < TRY);
+  $("tabs").innerHTML = all.map((n) => {
     const ok = state.attempts[n].success;
-    return `<button class="tab" role="tab" aria-selected="${n === state.selected}" data-att="${n}"><span class="dot ${ok ? "ok" : "bad"}"></span>Attempt ${n}</button>`;
+    const label = n > TRY ? `Your test ${n - TRY}` : `Attempt ${n}`;
+    return `<button class="tab${n > TRY ? " try" : ""}" role="tab" aria-selected="${n === state.selected}" data-att="${n}"><span class="dot ${ok ? "ok" : "bad"}"></span>${label}</button>`;
   }).join("");
   const r = state.attempts[state.selected];
   renderScreen(r);
   const st = state.steps.find((x) => x.step === "stress" && x.data);
-  const lastOk = Math.max(...Object.keys(state.attempts).map(Number).filter((n) => state.attempts[n].success), -1);
+  const lastOk = Math.max(...nums.filter((n) => state.attempts[n].success), -1);
   $("robust").hidden = !(st && state.selected === lastOk);
   if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass and friction`;
-  $("export").hidden = !(r && state.runId && !r.error);
+  $("export").hidden = !(r && state.runId && !r.error && state.selected < TRY);
+  const solved = nums.some((n) => state.attempts[n].success);
+  $("dataset").hidden = !(state.done && solved && state.runId);
+  if (dsRun !== state.runId) { dsRun = state.runId; dsReset(); }
   if (r && state.runId) $("export-link").href = `/api/runs/${encodeURIComponent(state.runId)}/export?attempt=${state.selected}`;
   $("goals").innerHTML = r ? r.goals.map((g) => `<div class="goal"><span class="pill ${g.ok ? "p-ok" : "p-bad"}">${g.ok ? "pass" : "fail"}</span><span>${esc(g.detail)}</span></div>`).join("") : "";
 
@@ -436,11 +582,43 @@ function renderStage() {
   $("trace").innerHTML = state.trace ? `<a href="${esc(state.trace)}" target="_blank" rel="noopener">Open the full LangSmith trace →</a>` : "";
 }
 
-function render() { renderTimeline(); renderStage(); }
+// The cascade strip: one node per pipeline stage, lit as the run moves through it.
+const CASCADE = [
+  { step: "planner", name: "Planner", model: "Nemotron 3 Super" },
+  { step: "grounder", name: "Grounder", model: "Tavily + Nemotron Nano" },
+  { step: "builder", name: "Builder", model: "Nemotron 3 Super" },
+  { step: "runner", name: "Simulator", model: "MuJoCo · checks in code" },
+  { step: "critic", name: "Critic", model: "Nemotron 3.5 Super VL" },
+  { step: "repair", name: "Repair", model: "Super → Ultra" },
+  { step: "stress", name: "Stress test", model: "MuJoCo · 16 variations" },
+];
+function renderCascade() {
+  const el = $("cascade");
+  el.innerHTML = CASCADE.map((c) => {
+    const runs = state.steps.filter((s) => s.step === c.step);
+    const last = runs[runs.length - 1];
+    let cls = "idle", meta = "", model = c.model;
+    if (last) {
+      cls = !last.doneTs ? "active" : (c.step === "runner" && last.data && !last.data.success) ? "fail" : "done";
+      const secs = runs.reduce((a, s) => a + (s.stats ? s.stats.latency_s : s.doneTs ? s.doneTs - s.startTs : 0), 0);
+      const cost = runs.reduce((a, s) => a + (s.stats ? s.stats.cost_usd : 0), 0);
+      meta = `${fmtS(secs)}${cost ? " · " + fmt$(cost) : ""}`;
+      if (c.step === "repair" && runs.some((s) => s.escalated)) { model = "escalated to Ultra"; if (cls !== "active") cls = "esc"; }
+      if (c.step === "stress" && last.data) meta = `${last.data.passed}/${last.data.trials} robust`;
+    }
+    const cnt = runs.length > 1 ? `<span class="cnt">×${runs.length}</span>` : "";
+    return `<div class="node ${cls}"><span class="nm">${c.name}${cnt}</span><span class="md">${esc(model)}</span><span class="mt">${meta}</span></div>`;
+  }).join("");
+}
+
+function render() { renderCascade(); renderTimeline(); renderStage(); }
 
 $("modes").addEventListener("click", (e) => {
   const b = e.target.closest("button");
-  if (b) { viewMode = b.dataset.mode; renderStage(); }
+  if (!b) return;
+  if (b.id === "ghost-btn") ghostOn = !ghostOn;
+  else viewMode = b.dataset.mode;
+  renderStage();
 });
 window.addEventListener("simviewer-ready", () => { if (state.selected) renderStage(); });
 $("tabs").addEventListener("click", (e) => {
@@ -455,7 +633,7 @@ function follow(runId) {
   if (source) source.close();
   clearInterval(ticker);
   reset();
-  if (viewer) { viewer.dispose(); viewer = null; }
+  disposeViews();
   $("screen").innerHTML = `<div class="idle">Waiting for the first attempt…</div>`;
   $("goals").innerHTML = "";
   setBusy(true);
@@ -526,6 +704,14 @@ fetch("/api/examples").then((r) => r.json()).then((ex) => {
 if (new URL(location).searchParams.get("theater") === "1") document.body.classList.add("theater");
 const initial = new URL(location).searchParams.get("run");
 if (initial) follow(initial);
+else fetch("/api/examples").then((r) => r.json()).then((ex) => {
+  // Landing: play the hero recorded run right away (URL stays clean).
+  const hero = (ex.featured || []).find((f) => f.hero) || (ex.featured || [])[0];
+  if (!hero || state.runId) return;
+  pendingStyle = "realistic";
+  follow(hero.run_id);
+  history.replaceState(null, "", location.pathname);
+});
 </script>
 </body>
 </html>

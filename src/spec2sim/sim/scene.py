@@ -75,7 +75,9 @@ def validate_objects(objects: list[SceneObject], allowed: set[str] | None = None
         extra = [n for n in names if n not in allowed]
         missing = sorted(allowed - set(names))
         if extra:
-            problems.append(f"objects {extra} are not in the task; use only {sorted(allowed)} (the floor is the table)")
+            hint = (" Names like 'D.handle' are move_to targets for a drawer, not scene objects."
+                    if any("." in n for n in extra) else "")
+            problems.append(f"objects {extra} are not in the task; use only {sorted(allowed)} (the floor is the table).{hint}")
         if missing:
             problems.append(f"task objects {missing} are missing from the scene")
     lo_x, hi_x = WORKSPACE["x"]
