@@ -116,7 +116,10 @@ def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None,
         q = pos(g.target)
         dz = p[2] - (q[2] + _half_h(scene, g.target) + _half_h(scene, g.obj))
         dxy = float(np.linalg.norm(p[:2] - q[:2]))
-        xy_tol = max(0.015, 0.5 * min(t.size[0], t.size[1]))
+        # Supported on top = right height and centered within half the LARGER footprint: a 6.5 cm ball
+        # resting on a 3 cm block cannot be centered to within 1.5 cm (RoboLab judges support, not centering).
+        o = scene.objects[g.obj]
+        xy_tol = max(0.015, 0.5 * max(min(t.size[0], t.size[1]), min(o.size[0], o.size[1])))
         ok = abs(dz) < ON_Z_TOL and dxy < xy_tol and held != g.obj
         detail = (f"{g.obj} is {dxy * 100:.1f} cm off-center from {g.target} (tol {xy_tol * 100:.1f}), "
                   f"height error {dz * 100:+.1f} cm (tol ±{ON_Z_TOL * 100:.1f})")

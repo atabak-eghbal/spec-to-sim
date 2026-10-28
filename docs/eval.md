@@ -22,6 +22,7 @@ Each eval round exposed failures that were then fixed in code, not by tuning pro
 | 3 (all fixes) | **8/8** | 3/8 | **$0.17** | First-try misses: invented "table" object (2×), a 10 cm bin for three blocks, the tennis ball rolling off (real physics) |
 | 4 (new: drawers, knock-over; 3 prompts) | 2/3 | 1/3 | $0.09 | Builder ignored the cabinet placement rule; a repair copied the prompt's placeholder name `D.handle`; a second object was dropped on top of the first in the drawer |
 | 5 (same 3, after fixes) | **3/3** | **3/3** | **$0.02** | Drawer placement moved into code (like bin sizing); real names in the prompt; side-by-side slot offsets |
+| 6 (all 11, web-sourced physics) | 9/11 → **11/11** | 7/11 → 9/11 | $0.11 | New: friction/bounciness per material from Tavily, verified quotes, size-vs-mass check. Two tasks crashed on a web size with a 0 dimension (fixed: treated as missing); both re-ran and passed first try. One task needed 3 attempts, one needed 2 |
 
 ## Round 3 detail
 

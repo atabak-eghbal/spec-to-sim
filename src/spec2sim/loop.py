@@ -35,7 +35,7 @@ def repair_model(attempt_failed: int) -> config.ModelInfo:
     return config.SUPER if attempt_failed == 1 else config.ULTRA
 
 
-def infeasible(task: TaskSpec, facts: GroundedFacts) -> str | None:
+def infeasible(task: TaskSpec, facts: GroundedFacts) -> tuple[str, list[str]] | None:
     """Check in code, before spending on a build, whether the grounded objects can be held at all.
 
     Both sides of the comparison are sourced: the object's size and mass come from the web, and so
@@ -47,7 +47,6 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> str | None:
     robot = facts.robot
     opening = (robot.gripper_opening_mm - 2) / 1000 if robot else MAX_GRASP_WIDTH
     payload = robot.payload_kg if robot else 3.0
-    src = f" ({robot.gripper_source})" if robot and robot.gripper_source else ""
     # Only objects that must be picked up need to fit the gripper (pushing or knocking over doesn't).
     movers = {g.obj for g in task.goals if g.type not in ("upright", "toppled", "opened", "closed")}
     for name in sorted(movers):
@@ -57,11 +56,14 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> str | None:
         sx, sy, _ = f.size
         width = min(sx, sy) if shapes.get(name) == "box" else max(sx, sy)
         if width > opening:
-            return (f"{name} is {width * 100:.1f} cm wide at its narrowest (real-world size from the web"
-                    f"{f' ({f.source_url})' if f.source_url else ''}), but the Franka gripper opens only "
-                    f"{opening * 100:.1f} cm (spec sheet{src}), so no motion plan can pick it up.")
+            origin = ("size implied by its weight from the web" if f.note.startswith("size corrected")
+                      else "size from the web" if f.source_url else "estimated size")
+            msg = (f"{name} is {width * 100:.1f} cm wide at its narrowest ({origin}), but the Franka gripper opens "
+                   f"only {opening * 100:.1f} cm (Franka datasheet), so no motion plan can pick it up.")
+            return msg, [u for u in (f.source_url, robot.gripper_source if robot else None) if u]
         if f.mass > payload:
-            return (f"{name} weighs {f.mass:.1f} kg, more than the Franka's {payload:g} kg payload (spec sheet{src}).")
+            return (f"{name} weighs {f.mass:.1f} kg, more than the Franka's {payload:g} kg payload (Franka datasheet).",
+                    [u for u in (f.source_url, robot.arm_source if robot else None) if u])
     return None
 
 
@@ -96,9 +98,10 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
     yield _ev("step", step="grounder", status="done", stats=_stats(st), tavily=tav,
               data=facts.model_dump(), sources=[s.model_dump() for s in sources])
 
-    reason = infeasible(task, facts)
-    if reason:
-        yield _ev("done", success=False, attempts=0, infeasible=reason, total_cost_usd=round(total_cost, 6))
+    stop = infeasible(task, facts)
+    if stop:
+        yield _ev("done", success=False, attempts=0, infeasible=stop[0], infeasible_sources=stop[1],
+                  total_cost_usd=round(total_cost, 6))
         return
 
     yield _ev("step", step="builder", status="running", model=config.SUPER.label, attempt=1)

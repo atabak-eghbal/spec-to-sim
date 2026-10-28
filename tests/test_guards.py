@@ -44,7 +44,7 @@ def test_too_wide_object_is_infeasible_before_building():
     task = _spec([Goal(type="inside", obj="apple", target="basket")])
     facts = lambda d: GroundedFacts(facts=[ObjectFact(name="apple", size=(d, d, d), mass=0.2),
                                            ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
-    assert "opens only" in infeasible(task, facts(0.083))
+    assert "opens only" in infeasible(task, facts(0.083))[0]
     assert infeasible(task, facts(0.07)) is None
 
 
@@ -133,3 +133,18 @@ def test_web_restitution_is_calibrated_in_the_simulator():
         first = int(np.argmax(z < 0.035))
         e_sim = np.sqrt((z[first:first + 500].max() - 0.033) / 0.367)
         assert abs(e_sim - e_web) < 0.06, (e_web, e_sim)
+
+
+def test_size_mass_two_out_of_three():
+    from spec2sim.grounder import _Extracted, _to_fact
+    e = _Extracted(name="grapefruit", quote="7.5 inches, 246 g", source_url="http://s", size_mm=(190.5, 190.5, 190.5),
+                   mass_g=246, note="from quote")
+    f = _to_fact(e, "sphere", prior_cm=(11, 11, 11), material="fruit")
+    assert 0.07 < f.size[0] < 0.095 and abs(f.mass - 0.246) < 1e-9 and "size corrected" in f.note
+
+
+def test_incomplete_web_size_falls_back_to_estimate():
+    from spec2sim.grounder import _Extracted, _to_fact
+    e = _Extracted(name="bin", quote="q", source_url="http://s", size_mm=(300, 0, 150), mass_g=500, note="x")
+    f = _to_fact(e, "box", prior_cm=(20, 15, 10), material="plastic")
+    assert min(f.size) > 0 and "incomplete" in f.note

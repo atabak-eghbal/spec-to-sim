@@ -1,35 +1,23 @@
 {
   "prompts": [
     {
-      "text": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
-      "category": "everyday"
-    },
-    {
-      "text": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
-      "category": "everyday"
-    },
-    {
       "text": "Pick up the tennis ball and place it on the Rubik's cube",
-      "category": "everyday"
+      "category": "fixed"
     },
     {
-      "text": "Put the soda can to the left of the Rubik's cube and keep it upright",
-      "category": "everyday"
+      "text": "Balance the tennis ball on top of the soda can",
+      "category": "fixed"
     },
     {
-      "text": "A Franka arm stacks the red cube on the blue cube",
-      "category": "shapes"
-    },
-    {
-      "text": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
-      "category": "shapes"
-    },
-    {
-      "text": "Clear the table: put the red, green and blue toy blocks into the storage bin",
-      "category": "shapes"
+      "text": "Stack two wooden toy blocks, then put the tennis ball on top of the tower",
+      "category": "fixed"
     },
     {
       "text": "Open the drawer, put the Rubik's cube inside, and close it",
+      "category": "beyond"
+    },
+    {
+      "text": "Put the tennis ball and the Rubik's cube into the drawer and close it",
       "category": "beyond"
     },
     {
@@ -37,87 +25,104 @@
       "category": "beyond"
     },
     {
-      "text": "Put the tennis ball and the Rubik's cube into the drawer and close it",
-      "category": "beyond"
+      "text": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
+      "category": "firsttry"
+    },
+    {
+      "text": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
+      "category": "firsttry"
+    },
+    {
+      "text": "Put the soda can to the left of the Rubik's cube and keep it upright",
+      "category": "firsttry"
+    },
+    {
+      "text": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
+      "category": "firsttry"
     }
   ],
   "featured": [
     {
-      "title": "Sorting fruit into bins",
-      "prompt": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
-      "run_id": "20261028-123520-54e9",
-      "category": "everyday"
-    },
-    {
-      "title": "Tidy up: stack + sort",
-      "prompt": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
-      "run_id": "20261028-121726-779a",
-      "category": "everyday"
-    },
-    {
-      "title": "Tennis ball rolls off, then repaired",
+      "title": "Tennis ball rolls off, then fixed",
       "prompt": "Pick up the tennis ball and place it on the Rubik's cube",
       "run_id": "20261028-151115-e705",
-      "category": "everyday"
+      "category": "fixed",
+      "hero": true,
+      "view": "compare"
     },
     {
-      "title": "Soda can left of the cube",
-      "prompt": "Put the soda can to the left of the Rubik's cube and keep it upright",
-      "run_id": "20261028-123722-1721",
-      "category": "everyday"
-    },
-    {
-      "title": "Cube placed on the floor, then repaired",
+      "title": "Cube put on the floor, then fixed",
       "prompt": "A Franka arm stacks the red cube on the blue cube",
       "run_id": "20261028-093211-b9fb",
-      "category": "shapes"
+      "category": "fixed",
+      "style": "plain",
+      "view": "compare"
     },
     {
-      "title": "Rubik's cube on a soda can",
-      "prompt": "Put the Rubik's cube on top of the soda can",
-      "run_id": "20261028-093211-cf29",
-      "category": "everyday"
+      "title": "Fruit sorting: bins overlapped, then fixed",
+      "prompt": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
+      "run_id": "20261028-123520-54e9",
+      "category": "fixed"
     },
     {
-      "title": "Three-block tower",
-      "prompt": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
-      "run_id": "20261028-093304-b86e",
-      "category": "shapes"
-    },
-    {
-      "title": "Drawer: open, put cube in, close",
+      "title": "Drawer: first plan out of reach, then fixed",
       "prompt": "Open the drawer, put the Rubik's cube inside, and close it",
       "run_id": "20261028-142206-5e4c",
-      "category": "beyond"
+      "category": "fixed",
+      "view": "compare"
     },
     {
       "title": "Drawer: two objects, then close",
       "prompt": "Put the tennis ball and the Rubik's cube into the drawer and close it",
       "run_id": "20261028-142918-490a",
-      "category": "beyond",
-      "hero": true
+      "category": "beyond"
     },
     {
       "title": "Knock over a block tower",
       "prompt": "Knock over the tower of three wooden toy blocks",
       "run_id": "20261028-165935-e1e5",
       "category": "beyond"
+    },
+    {
+      "title": "Tidy up: stack + sort",
+      "prompt": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
+      "run_id": "20261028-121726-779a",
+      "category": "firsttry"
+    },
+    {
+      "title": "Soda can left of the cube",
+      "prompt": "Put the soda can to the left of the Rubik's cube and keep it upright",
+      "run_id": "20261028-123722-1721",
+      "category": "firsttry"
+    },
+    {
+      "title": "Rubik's cube on a soda can",
+      "prompt": "Put the Rubik's cube on top of the soda can",
+      "run_id": "20261028-093211-cf29",
+      "category": "firsttry"
+    },
+    {
+      "title": "Three-block tower",
+      "prompt": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
+      "run_id": "20261028-093304-b86e",
+      "category": "firsttry",
+      "style": "plain"
     }
   ],
   "categories": [
     {
-      "id": "everyday",
-      "label": "Everyday objects",
+      "id": "fixed",
+      "label": "The AI fixes itself",
       "style": "realistic"
-    },
-    {
-      "id": "shapes",
-      "label": "Basic shapes",
-      "style": "plain"
     },
     {
       "id": "beyond",
       "label": "Beyond pick & place",
+      "style": "realistic"
+    },
+    {
+      "id": "firsttry",
+      "label": "First-try successes",
       "style": "realistic"
     }
   ]

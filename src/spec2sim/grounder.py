@@ -165,7 +165,14 @@ _MIN_DENSITY, _MAX_DENSITY, _DEFAULT_DENSITY = 150, 9000, 900
 PRIOR_TOLERANCE = 2.0  # web size may differ from the Planner's own estimate by at most this factor
 
 
-def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | None = None) -> ObjectFact:
+# Typical bulk density per material (kg/m^3) for the size-vs-mass consistency check; hollow things
+# (tennis balls, cans of air, cardboard boxes) are low.
+DENSITY = {"fruit": 850, "wood": 600, "plastic": 700, "metal": 1000, "rubber": 400, "glass": 2500,
+           "ceramic": 2000, "cardboard": 200, "paper": 700, "fabric": 300, "foam": 50}
+
+
+def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | None = None,
+             material: str | None = None) -> ObjectFact:
     """Convert mm/g to SI and sanity-check size against the Planner's prior and mass against volume."""
     size = tuple(v / 1000 for v in e.size_mm)
     mass = e.mass_g / 1000
@@ -174,6 +181,10 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
         # diameter is its smaller horizontal value (spheres: all three equal the diameter).
         d = min(size[0], size[1])
         size = (d, d, d) if shape == "sphere" else (d, d, size[2])
+    if min(size) <= 0:  # the web gave an incomplete size (a 0 or missing dimension)
+        fallback = tuple(v / 100 for v in prior_cm) if prior_cm and all(v > 0 for v in prior_cm) else (0.05, 0.05, 0.05)
+        e = e.model_copy(update={"quote": "", "note": f"web size {list(e.size_mm)} mm incomplete; used the estimate"})
+        size = fallback
     if prior_cm and all(v > 0 for v in prior_cm):
         prior = tuple(v / 100 for v in prior_cm)
         ratio = max(max(a / b, b / a) for a, b in zip(sorted(size), sorted(prior), strict=True))
@@ -199,6 +210,18 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
                           source_url=e.source_url if e.quote.strip() else None, note=note)
     density = mass / vol if vol > 0 else 0
     if vol > 0 and not _MIN_DENSITY <= density <= _MAX_DENSITY:
+        # Size and mass disagree. Two out of three: whichever of them agrees with the Planner's own
+        # size estimate wins (e.g. a "19 cm" grapefruit weighing 246 g is really ~8 cm).
+        k = (mass / (_DEFAULT_DENSITY if material is None else DENSITY.get(material, _DEFAULT_DENSITY)) / vol) ** (1 / 3)
+        from_mass = tuple(round(v * k, 4) for v in size)
+        if prior_cm and mass > 0 and not note.startswith("web size"):
+            prior = sorted(v / 100 for v in prior_cm)
+            off = lambda sz: max(max(a / b, b / a) for a, b in zip(sorted(sz), prior, strict=True))
+            if off(from_mass) < off(size) and off(from_mass) <= 1.6:
+                web_cm = [round(v * 100, 1) for v in size]
+                return ObjectFact(name=e.name, size=from_mass, mass=mass, source_url=e.source_url if e.quote.strip() else None,
+                                  note=f"size corrected: web {web_cm} cm doesn't fit its {e.mass_g:g} g weight; "
+                                       f"used the size the weight implies")
         mass = round(vol * _DEFAULT_DENSITY, 4)
         fix = f"mass corrected: {e.mass_g:g} g implies {density:.0f} kg/m3"
         note = f"{note}; {fix}" if note.startswith("web size") else fix
@@ -376,7 +399,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     for e in ex.facts:
         if e.quote.strip() and not verified(e.quote, corpus):  # invented citation: keep numbers, drop the source
             e = e.model_copy(update={"quote": "", "evidence": [], "note": "estimate (quote not found in sources)"})
-        f = _to_fact(e, shapes.get(e.name, "box"), priors.get(e.name))
+        f = _to_fact(e, shapes.get(e.name, "box"), priors.get(e.name), mats.get(e.name))
         checked, agree = _agreement(e, f) if not f.note.startswith("web size") else (0, 0)
         f.sources_checked, f.sources_agree = checked, agree
         f.material = mats.get(e.name)

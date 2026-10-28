@@ -570,7 +570,10 @@ function renderTimeline() {
       <div class="step-body">${running ? `<p style="color:var(--muted)">${runningText(s)}</p>` : stepBody(s)}</div></div>`;
   }
   for (const n of state.notes || []) html += `<div class="note">${esc(n)}</div>`;
-  if (state.done && state.done.infeasible) html += `<div class="errbox"><strong>Physically infeasible.</strong> ${esc(state.done.infeasible)} Stopped before building, so no credits were spent on repairs.</div>`;
+  if (state.done && state.done.infeasible) {
+    const src = (state.done.infeasible_sources || []).map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener">${i ? "datasheet" : "object source"}</a>`).join(" · ");
+    html += `<div class="errbox"><strong>Physically infeasible.</strong> ${esc(state.done.infeasible)} Stopped before building, so no credits were spent on repairs.${src ? `<br><span class="mono" style="font-size:.78rem">Sources: ${src}</span>` : ""}</div>`;
+  }
   if (state.error) html += `<div class="errbox">Run stopped: ${esc(state.error)}</div>`;
   tl.innerHTML = html;
 }
@@ -733,7 +736,7 @@ fetch("/api/examples").then((r) => r.json()).then((ex) => {
   for (const f of ex.featured || []) {
     const b = document.createElement("button"); b.type = "button"; b.className = "chip rec"; b.textContent = "▶ " + f.title;
     b.dataset.cat = cat(f);
-    b.onclick = () => { $("prompt").value = f.prompt; pendingStyle = catStyle[cat(f)]; follow(f.run_id); };
+    b.onclick = () => { $("prompt").value = f.prompt; pendingStyle = f.style || catStyle[cat(f)]; if (f.view) viewMode = f.view; follow(f.run_id); };
     $("featured").appendChild(b);
   }
   const tabs = $("gtabs");
@@ -757,7 +760,8 @@ else if (new URL(location).searchParams.get("hero") !== "0") fetch("/api/example
   // Landing: play the hero recorded run right away (URL stays clean).
   const hero = (ex.featured || []).find((f) => f.hero) || (ex.featured || [])[0];
   if (!hero || state.runId) return;
-  pendingStyle = "realistic";
+  pendingStyle = hero.style || "realistic";
+  if (hero.view) viewMode = hero.view;
   follow(hero.run_id);
   history.replaceState(null, "", location.pathname);
 });
