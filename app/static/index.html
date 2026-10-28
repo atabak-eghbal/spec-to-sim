@@ -21,15 +21,24 @@
   --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark "control room" by default (matches the 3D stage); the header switch stores a choice. */
+:root[data-theme="dark"] {
     color-scheme: dark;
-    --paper: #0f161c; --sheet: #16212a; --ink: #e3eaef; --muted: #9aabb8; --rule: #2a3a47;
-    --accent: #7fb0e0; --accent-soft: #1b2e40;
-    --ok: #6fc38f; --ok-soft: #173326; --bad: #ec8a72; --bad-soft: #3a211b; --warn: #e2b55c; --warn-soft: #382c14;
-    --m-nano: #4fc2b8; --m-super: #7fb0e0; --m-vl: #b996e6; --m-ultra: #ec8a72; --m-code: #9aabb8; --m-tavily: #e3eaef;
+    --paper: #0b1116; --sheet: #121b23; --ink: #e6edf2; --muted: #93a5b3; --rule: #22323f;
+    --accent: #7fb0e0; --accent-soft: #17293a;
+    --ok: #6fc38f; --ok-soft: #13301f; --bad: #ec8a72; --bad-soft: #35201a; --warn: #e2b55c; --warn-soft: #352a13;
+    --m-nano: #4fc2b8; --m-super: #7fb0e0; --m-vl: #b996e6; --m-ultra: #ec8a72; --m-code: #93a5b3; --m-tavily: #e6edf2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0b1116; --sheet: #121b23; --ink: #e6edf2; --muted: #93a5b3; --rule: #22323f;
+    --accent: #7fb0e0; --accent-soft: #17293a;
+    --ok: #6fc38f; --ok-soft: #13301f; --bad: #ec8a72; --bad-soft: #35201a; --warn: #e2b55c; --warn-soft: #352a13;
+    --m-nano: #4fc2b8; --m-super: #7fb0e0; --m-vl: #b996e6; --m-ultra: #ec8a72; --m-code: #93a5b3; --m-tavily: #e6edf2;
   }
 }
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; }
@@ -39,13 +48,14 @@ button, textarea { font: inherit; color: inherit; }
 a { color: var(--accent); }
 .mono { font-family: var(--mono); }
 .label { font: 500 0.7rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
-.wrap { max-width: 82rem; margin: 0 auto; display: grid; gap: 1.4rem; }
+.wrap { max-width: 90rem; margin: 0 auto; display: grid; gap: 0.9rem; }
 
 /* header */
-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem 1.5rem; padding: 1.2rem 0 0.9rem; border-bottom: 2px solid var(--ink); }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1.2rem; padding: 0.8rem 0 0.6rem; border-bottom: 1px solid var(--rule); }
 .brand { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
-.brand h1 { font: 800 1.9rem/1 var(--display); font-stretch: 78%; margin: 0; letter-spacing: -0.01em; }
+.brand h1 { font: 800 1.7rem/1 var(--display); font-stretch: 78%; margin: 0; letter-spacing: -0.01em; }
 .brand p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.theme { border: 1px solid var(--rule); background: var(--sheet); border-radius: 99px; width: 1.9rem; height: 1.9rem; cursor: pointer; margin-left: 0.4rem; }
 .cascade-key { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
 
 /* badges */
@@ -54,25 +64,25 @@ header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content:
 .b-Ultra { background: var(--m-ultra); } .b-code { background: var(--m-code); } .b-Tavily { background: var(--m-tavily); }
 
 /* composer */
-.composer { display: grid; gap: 0.7rem; }
+.composer { display: grid; gap: 0.5rem; }
 .prompt-row { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; align-items: stretch; }
-textarea#prompt { width: 100%; min-height: 3.2rem; resize: vertical; padding: 0.75rem 0.9rem; border: 1.5px solid var(--rule); border-radius: 4px; background: var(--sheet); font-size: 1.05rem; }
+textarea#prompt { width: 100%; min-height: 2.7rem; resize: vertical; padding: 0.75rem 0.9rem; border: 1.5px solid var(--rule); border-radius: 4px; background: var(--sheet); font-size: 1.05rem; }
 textarea#prompt:focus-visible { outline: none; border-color: var(--accent); }
 button.run { padding: 0 1.4rem; border: 0; border-radius: 4px; background: var(--ink); color: var(--paper); font: 700 1rem/1 var(--display); font-stretch: 85%; cursor: pointer; letter-spacing: 0.02em; }
 button.run:disabled { opacity: 0.45; cursor: progress; }
 button.run:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.chips { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
-.chip { border: 1px solid var(--rule); background: var(--sheet); border-radius: 99px; padding: 0.3rem 0.75rem; font-size: 0.85rem; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.chip { border: 1px solid var(--rule); background: var(--sheet); border-radius: 99px; padding: 0.22rem 0.65rem; font-size: 0.8rem; cursor: pointer; }
 .chip:hover { border-color: var(--accent); }
 .chip.rec { border-style: dashed; }
 .gtabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
-.gtab { border: 0; background: none; padding: 0.45rem 0.9rem; font: 600 0.9rem/1 var(--display); font-stretch: 88%; color: var(--muted); cursor: pointer;
+.gtab { border: 0; background: none; padding: 0.35rem 0.8rem; font: 600 0.9rem/1 var(--display); font-stretch: 88%; color: var(--muted); cursor: pointer;
   border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .gtab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
 .gtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* main split */
-.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 1.4rem; align-items: start; }
+.split { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 1.1rem; align-items: start; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } .stage { position: static !important; } }
 
 /* timeline */
@@ -140,7 +150,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
   box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
 .v-goal.ok { background: #e1f1e6; color: #1f5c39; } .v-goal.bad { background: #f7e4df; color: #8f3420; }
 .cascade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; position: relative; }
-.node { position: relative; padding: 0.55rem 0.6rem 0.6rem; border: 1px solid var(--rule); background: var(--sheet); margin-right: 14px;
+.node { position: relative; padding: 0.4rem 0.55rem 0.45rem; border: 1px solid var(--rule); background: var(--sheet); margin-right: 14px;
   border-radius: 6px; display: grid; gap: 0.25rem; min-width: 0; transition: border-color .3s, box-shadow .3s; }
 .node:not(:last-child)::after { content: ""; position: absolute; right: -15px; top: 50%; width: 14px; height: 2px; background: var(--rule); }
 .node.done:not(:last-child)::after { background: var(--ok); }
@@ -218,13 +228,14 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
       <span class="badge b-Super">Nemotron 3 Super</span><span class="badge b-Nano">Nano</span>
       <span class="badge b-SuperVL">3.5 Super VL</span><span class="badge b-Ultra">Ultra</span>
       <span class="label">on Nebius Token Factory</span>
+      <button type="button" class="theme" id="theme" title="Switch light / dark">◐</button>
     </div>
   </header>
 
   <section class="composer" aria-label="New task">
     <form class="prompt-row" id="form">
       <label class="label" for="prompt" hidden>Task</label>
-      <textarea id="prompt" rows="2" placeholder="e.g. Put the Rubik's cube on top of the soda can" maxlength="300"></textarea>
+      <textarea id="prompt" rows="1" placeholder="e.g. Put the Rubik's cube on top of the soda can" maxlength="300"></textarea>
       <button class="run" id="runbtn" type="submit">Simulate</button>
     </form>
     <div class="gtabs" id="gtabs" role="tablist" aria-label="Example categories"></div>
@@ -276,6 +287,16 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 
 <script>
 const $ = (id) => document.getElementById(id);
+(function theme() {  // dark by default; remembered per browser
+  let t = "dark";
+  try { t = localStorage.getItem("s2s-theme") || "dark"; } catch (e) { /* storage blocked */ }
+  document.documentElement.dataset.theme = t;
+  $("theme").onclick = () => {
+    const n = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = n;
+    try { localStorage.setItem("s2s-theme", n); } catch (e) { /* ignore */ }
+  };
+})();
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const badgeClass = (label) => "b-" + String(label || "code").replace(/\s+/g, "");
 const STEP_NAMES = { planner: "Planner", grounder: "Grounder", builder: "Builder", runner: "Simulator", critic: "Critic", repair: "Repair", stress: "Stress test" };

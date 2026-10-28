@@ -20,11 +20,14 @@ You type: *"Open the drawer, put the Rubik's cube inside, and close it."*
 5. **Watch:** if a goal fails, Nemotron 3.5 Super VL looks at 8 frames from the run plus the measured failures, and explains what went wrong and how to fix it.
 6. **Repair:** Super rewrites the plan. If that fails too, the repair **escalates to Nemotron 3 Ultra**. At most 4 attempts.
 7. **Stress-test:** a successful plan is re-run 16 times with the objects nudged, turned, heavier or lighter and more or less slippery. The result is a robustness score, not a lucky run.
+8. **Generate training data:** one click turns the solved task into 20 successful demonstrations with varied starts, saved in **LeRobot v2.1 format** (Parquet + MP4, the format NVIDIA GR00T post-training reads). It's the language-driven version of what Isaac Lab Mimic and NVIDIA's GR00T blueprint do: multiply demonstrations and keep the successful ones. Verified by loading it with Hugging Face's `lerobot` (v0.3.3).
 
-Every step streams live to the web app with the model that ran it, its time, tokens and cost. Each attempt replays **in 3D in the browser**, with the code's ✓/✗ verdict drawn on each object. **Export scene** downloads the generated scene (MuJoCo XML), the success checks and the motion plan, ready to test a robot policy against.
+Every step streams live to the web app with the model that ran it, its time, tokens and cost, and a cascade strip lights up each stage as it runs. Each attempt replays **in 3D in the browser**, with the code's ✓/✗ verdict drawn on each object. **Before / after** shows the first failed attempt beside the repaired one on one clock and camera (or as a red "ghost"). **Move objects** lets you drag things to new spots and re-run the same plan: physics only, no model cost, so you can try to break it. **Export scene** downloads the generated scene (MuJoCo XML), the success checks and the motion plan, ready to test a robot policy against.
 
 | | |
 |---|---|
+![Before / after: the failed attempt with the tennis ball beside the cube and a red label, next to the repaired attempt with the ball on the cube and a green label](docs/img/before_after.jpg)
+
 | ![A failed attempt: the tennis ball rolled off the Rubik's cube, with a red label reading tennis_ball on rubiks_cube, 9.3 cm off](docs/img/failed_attempt.jpg) | ![A Franka arm placing a tennis ball and a Rubik's cube into a pulled-out wooden drawer](docs/img/drawer.jpg) |
 | **A real failure, measured by code.** The ball was let go 1.6 cm above the cube and rolled off. The Critic explained why, and Super's repair succeeded on attempt 2. | **Beyond pick-and-place.** Open a drawer by its handle, put two objects in, push it shut. Modelled on Isaac Lab's Franka open-drawer task. |
 
@@ -45,6 +48,7 @@ Robotics teams spend days hand-building simulation scenes to test a single skill
 | Spatial goals | "Put the soda can to the left of the Rubik's cube and keep it upright" |
 | Articulated objects | "Open the drawer, put the Rubik's cube inside, and close it" |
 | Contact-rich, no grasp | "Knock over the tower of three wooden toy blocks" |
+| Training data | Any solved task → 20 successful demonstrations in LeRobot format (fruit sorting: 3,340 frames in 77 s) |
 | Says no when physics says no | An object wider than the gripper's 7.8 cm opening stops the run before any money is spent on repairs |
 
 Batch evaluation (`scripts/eval.py`, results in [docs/eval.md](docs/eval.md)): the first round passed 4/8 tasks. Each failure was traced and fixed in code, not by retrying prompts until they passed. The third round passed **8/8 for $0.17 of model calls in total**, and the three drawer and knock-over tasks then passed 3/3 on the first try for $0.02.
