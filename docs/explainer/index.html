@@ -1,0 +1,447 @@
+<title>Spec-to-Sim Logbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an engineering logbook. One reading column, wide figures and tables break out to the full width. */
+:root {
+  --paper: #f3f6f7;
+  --sheet: #ffffff;
+  --ink: #15212b;
+  --muted: #566573;
+  --rule: #d5dde2;
+  --accent: #2c5d8f;        /* MuJoCo floor blue */
+  --accent-soft: #e2ecf5;
+  --ok: #2f7d4f; --ok-soft: #e1f1e6;
+  --bad: #b4462f; --bad-soft: #f7e4df;
+  --warn: #9a6a12; --warn-soft: #f6ecd6;
+  /* model badge colors */
+  --m-nano: #0f7a72; --m-super: #2c5d8f; --m-vl: #7a4fb0; --m-ultra: #b4462f; --m-code: #566573;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --col: 46rem;
+  --wide: 68rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0f161c; --sheet: #16212a; --ink: #e3eaef; --muted: #9aabb8; --rule: #2a3a47;
+    --accent: #7fb0e0; --accent-soft: #1b2e40;
+    --ok: #6fc38f; --ok-soft: #173326; --bad: #ec8a72; --bad-soft: #3a211b; --warn: #e2b55c; --warn-soft: #382c14;
+    --m-nano: #4fc2b8; --m-super: #7fb0e0; --m-vl: #b996e6; --m-ultra: #ec8a72; --m-code: #9aabb8;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f161c; --sheet: #16212a; --ink: #e3eaef; --muted: #9aabb8; --rule: #2a3a47;
+  --accent: #7fb0e0; --accent-soft: #1b2e40;
+  --ok: #6fc38f; --ok-soft: #173326; --bad: #ec8a72; --bad-soft: #3a211b; --warn: #e2b55c; --warn-soft: #382c14;
+  --m-nano: #4fc2b8; --m-super: #7fb0e0; --m-vl: #b996e6; --m-ultra: #ec8a72; --m-code: #9aabb8;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 0 4rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: var(--wide); margin: 0 auto; display: grid; gap: 3.5rem; }
+.col { max-width: var(--col); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; font-stretch: 80%; letter-spacing: -0.01em; }
+h2 { font-size: 1.6rem; font-weight: 700; font-stretch: 85%; }
+h3 { font-size: 1.1rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+code { background: var(--accent-soft); padding: 0.05em 0.35em; border-radius: 3px; }
+.label { font: 500 0.72rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+section { display: grid; gap: 1.1rem; }
+.stack { display: grid; gap: 0.8rem; }
+
+/* header */
+header { padding-top: 2.5rem; display: grid; gap: 1.2rem; border-bottom: 2px solid var(--ink); padding-bottom: 1.6rem; }
+.lede { font-size: 1.15rem; max-width: var(--col); }
+.status { display: flex; flex-wrap: wrap; gap: 0.6rem 2rem; font-family: var(--mono); font-size: 0.85rem; }
+.status div { display: grid; gap: 0.25rem; }
+.status b { font-weight: 500; font-size: 1rem; font-variant-numeric: tabular-nums; }
+
+/* model badges */
+.badge { display: inline-block; font: 500 0.72rem/1 var(--mono); padding: 0.3em 0.55em; border-radius: 3px; color: var(--sheet); white-space: nowrap; vertical-align: 0.1em; }
+.b-nano { background: var(--m-nano); } .b-super { background: var(--m-super); } .b-vl { background: var(--m-vl); }
+.b-ultra { background: var(--m-ultra); } .b-code { background: var(--m-code); } .b-tavily { background: var(--ink); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: 0.6rem; counter-reset: step; }
+.stage { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 0.9rem; display: grid; gap: 0.5rem; align-content: start; position: relative; }
+.stage h3 { font-size: 1rem; }
+.stage p { font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+.stage .io { font: 400 0.75rem/1.4 var(--mono); color: var(--ink); border-top: 1px dashed var(--rule); padding-top: 0.5rem; }
+.stage.loop { border-color: var(--accent); border-style: dashed; }
+.loopnote { display: flex; gap: 0.8rem; align-items: baseline; flex-wrap: wrap; font-size: 0.92rem; background: var(--accent-soft); padding: 0.8rem 1rem; border-radius: 4px; }
+
+/* figures */
+figure { margin: 0; display: grid; gap: 0.5rem; }
+figure img { width: 100%; border-radius: 3px; border: 1px solid var(--rule); display: block; }
+figcaption { font-size: 0.85rem; color: var(--muted); }
+.pair { display: grid; gap: 1.2rem; }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 500 0.72rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill { display: inline-block; font: 500 0.75rem/1 var(--mono); padding: 0.3em 0.5em; border-radius: 99px; white-space: nowrap; }
+.p-ok { background: var(--ok-soft); color: var(--ok); }
+.p-bad { background: var(--bad-soft); color: var(--bad); }
+.p-warn { background: var(--warn-soft); color: var(--warn); }
+
+/* decision log */
+.decisions { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+details.dec { border-bottom: 1px solid var(--rule); }
+details.dec summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: 3.2rem 1fr auto; gap: 0.8rem; align-items: baseline; padding: 0.85rem 0.2rem; }
+details.dec summary::-webkit-details-marker { display: none; }
+details.dec summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dec-id { font: 500 0.8rem/1 var(--mono); color: var(--muted); }
+.dec-title { font-weight: 600; }
+.dec-area { font: 400 0.75rem/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.dec-body { display: grid; gap: 0.6rem; padding: 0 0.2rem 1.1rem 4rem; max-width: calc(var(--col) + 4rem); font-size: 0.95rem; }
+.dec-body dl { display: grid; grid-template-columns: 7rem 1fr; gap: 0.4rem 0.8rem; margin: 0; }
+.dec-body dt { font: 500 0.72rem/1.6 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.dec-body dd { margin: 0; }
+details.dec[open] summary .dec-title { color: var(--accent); }
+
+/* findings + risks */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 0.8rem; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 1rem; display: grid; gap: 0.45rem; align-content: start; font-size: 0.92rem; }
+.card .label { display: flex; gap: 0.5rem; align-items: center; }
+
+/* timeline */
+.timeline { display: grid; gap: 0; }
+.day { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid var(--rule); }
+.day:last-child { border-bottom: 0; }
+.day ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.2rem; font-size: 0.92rem; }
+.done { color: var(--muted); }
+.done::marker { content: "✓  "; color: var(--ok); }
+.todo::marker { content: "○  "; color: var(--muted); }
+.now::marker { content: "▶  "; color: var(--accent); }
+
+.gloss { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.4rem 2rem; margin: 0; }
+.gloss div { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.6rem; font-size: 0.9rem; padding: 0.35rem 0; border-bottom: 1px dotted var(--rule); }
+.gloss dt { font-family: var(--mono); font-size: 0.85rem; color: var(--accent); }
+.gloss dd { margin: 0; }
+
+footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 1rem; }
+
+@media (max-width: 640px) {
+  .day { grid-template-columns: 1fr; gap: 0.4rem; }
+  details.dec summary { grid-template-columns: 2.6rem 1fr; }
+  .dec-area { display: none; }
+  .dec-body { padding-left: 0.2rem; }
+  .dec-body dl { grid-template-columns: 1fr; gap: 0.1rem; }
+  .dec-body dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  details.dec[open] .dec-body { animation: open 0.18s ease-out; }
+  @keyframes open { from { opacity: 0.4; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="label">Project logbook · updated Wed Oct 28, 2026, morning session</span>
+  <h1>Spec-to-Sim</h1>
+  <p class="lede">You type a robot task in plain English. A chain of NVIDIA Nemotron models turns it into a MuJoCo simulation, runs it, watches the video, and repairs the plan until the task succeeds. This page explains how it works, what has been built, and why each decision was made.</p>
+  <div class="status">
+    <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
+    <div><span class="label">Target submit</span><b>08:00 PT</b></div>
+    <div><span class="label">Model spend</span><b>$0.05 / $20 cap</b></div>
+    <div><span class="label">Tests</span><b>6 / 6 passing</b></div>
+    <div><span class="label">Repo</span><b>private until submit</b></div>
+  </div>
+</header>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section>
+  <span class="label">How it works</span>
+  <h2>Six steps, and only the first three always run</h2>
+  <p class="col">Each step has one job and hands a validated data structure to the next. The models only ever produce data (JSON checked against a schema). Our own code builds the scene, moves the robot, and decides pass or fail.</p>
+  <div class="pipe">
+    <div class="stage">
+      <span class="label">Step 1</span>
+      <h3>Planner <span class="badge b-super">Super</span></h3>
+      <p>Reads the English task. Lists the objects, writes the success goals, and proposes web searches.</p>
+      <div class="io">→ TaskSpec</div>
+    </div>
+    <div class="stage">
+      <span class="label">Step 2</span>
+      <h3>Grounder <span class="badge b-tavily">Tavily</span> <span class="badge b-nano">Nano</span></h3>
+      <p>Searches the web for real sizes and masses. Nano pulls out the numbers and cites the page.</p>
+      <div class="io">→ GroundedFacts + sources</div>
+    </div>
+    <div class="stage">
+      <span class="label">Step 3</span>
+      <h3>Builder <span class="badge b-super">Super</span></h3>
+      <p>Places the objects and writes the motion plan: move, close gripper, lift, open.</p>
+      <div class="io">→ Build (objects + actions)</div>
+    </div>
+    <div class="stage loop">
+      <span class="label">Step 4</span>
+      <h3>Runner <span class="badge b-code">our code</span></h3>
+      <p>Runs MuJoCo with the Franka Panda, records video, and checks each goal with fixed tolerances.</p>
+      <div class="io">→ RunResult (pass/fail, events, video)</div>
+    </div>
+    <div class="stage loop">
+      <span class="label">Step 5 · on failure</span>
+      <h3>Critic <span class="badge b-vl">Super VL</span></h3>
+      <p>Looks at 8 frames of the video plus the measurements and explains why it failed.</p>
+      <div class="io">→ Critique (evidence, cause, fix)</div>
+    </div>
+    <div class="stage loop">
+      <span class="label">Step 6 · on failure</span>
+      <h3>Repair <span class="badge b-super">Super</span> → <span class="badge b-ultra">Ultra</span></h3>
+      <p>Rewrites the scene and plan using the critique. The first repair uses Super; later ones escalate to Ultra.</p>
+      <div class="io">→ new Build, back to step 4</div>
+    </div>
+  </div>
+  <div class="loopnote">
+    <span class="label">Loop</span>
+    <span>Steps 4 to 6 repeat up to 4 attempts in total. Attempt 1 is built by Super, the first repair is Super, the second and third repairs use Ultra. Every call is traced in LangSmith with its latency, tokens and cost.</span>
+  </div>
+</section>
+
+<!-- ============ EVIDENCE ============ -->
+<section>
+  <span class="label">What works so far</span>
+  <h2>Three runs worth looking at</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Run</th><th>What happened</th><th>Result</th><th>Attempts</th><th>Model cost</th></tr></thead>
+      <tbody>
+        <tr><td>“A Franka arm stacks the red cube on the blue cube”</td><td>Full pipeline, first try. Tavily found nothing useful for a generic cube, so Nano estimated the size and said so.</td><td><span class="pill p-ok">pass</span></td><td class="num">1</td><td class="num">$0.0023</td></tr>
+        <tr><td>“Put the Rubik's cube on top of the soda can”</td><td>Tavily found the real cube size (5.6 cm) with a source link. Stacked within 0.1 cm of center.</td><td><span class="pill p-ok">pass</span></td><td class="num">1</td><td class="num">$0.0028</td></tr>
+        <tr><td>Repair test (deliberately broken plan)</td><td>The plan released the cube 13 cm too high and 3 cm off-center. It fell and tipped over. The Critic said “dropped from too high”, Super repaired the plan, and attempt 2 stacked it.</td><td><span class="pill p-bad">fail</span> → <span class="pill p-ok">pass</span></td><td class="num">2</td><td class="num">$0.0030</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pair">
+    <figure>
+      <img src="img/repair_attempt1.jpg" alt="Eight frames: the arm lifts the red cube, releases it high above the blue cube, and the red cube tips over beside it">
+      <figcaption><b>Attempt 1, broken plan.</b> This is the exact image the Critic sees: 8 timestamped frames in one grid. The red cube is let go too high, lands beside the blue cube, and tips over.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/repair_attempt2.jpg" alt="Eight frames: the arm lifts the red cube and sets it down squarely on the blue cube">
+      <figcaption><b>Attempt 2, after Critic and repair.</b> Same task. The repaired plan lowers the cube onto the blue one before opening the gripper.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/rubiks_soda.jpg" alt="Eight frames: the arm picks up a cube and places it on top of a cylinder">
+      <figcaption><b>Rubik's cube on soda can.</b> Sizes from the web: cube 5.6 cm, can 6.6 cm wide and 12.3 cm tall.</figcaption>
+    </figure>
+  </div>
+  <p class="col" style="font-size:0.9rem;color:var(--muted)">Full videos are in <code>runs/</code> on your machine. Each attempt folder has <code>run.mp4</code>, the contact sheet and 8 single frames.</p>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section>
+  <span class="label">Decision log</span>
+  <h2>Why it is built this way</h2>
+  <p class="col">Click a decision to see the reasoning and the alternative we turned down. New decisions are added at the bottom as the project moves.</p>
+  <div class="decisions">
+
+    <details class="dec">
+      <summary><span class="dec-id">D01</span><span class="dec-title">The model never writes robot XML or code</span><span class="dec-area">safety · reliability</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The robot comes from MuJoCo Menagerie, a library of hand-checked robot models. The Builder only returns object records (shape, size, mass, position) and a list of actions. Our code turns those into MuJoCo bodies with MjSpec.</dd>
+        <dt>Why</dt><dd>Model-written robot XML breaks in subtle ways (joint limits, inertia, mesh paths). Running model-written Python is a security risk. Data checked against a schema either passes validation or produces a clear error the model can fix.</dd>
+        <dt>Rejected</dt><dd>Letting the model write the MJCF objects fragment directly, as first planned. Generating it from validated data is just as flexible and cannot produce broken XML.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D02</span><span class="dec-title">Pass or fail is decided in code, never by the vision model</span><span class="dec-area">trust</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Each goal is checked numerically. For <code>on(A, B)</code>: A's bottom must be within 1.5 cm of B's top, A's center within half of B's width of B's center, and the gripper must have let go.</dd>
+        <dt>Why</dt><dd>Vision models can be confidently wrong. Code gives a repeatable answer, and it lets us run a batch evaluation with a real success rate. The Critic only explains a failure that code has already confirmed.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D03</span><span class="dec-title">Motion targets are relative to objects, resolved when the step runs</span><span class="dec-area">controller</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>An action can say “move to the blue cube's center plus 5.3 cm up” instead of a fixed world coordinate. The position is read from the simulation at the moment that step starts.</dd>
+        <dt>Why</dt><dd>Objects settle and shift slightly. Relative targets keep the plan correct anyway, and they are much easier for a model to get right than raw coordinates.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D04</span><span class="dec-title">Our own small IK solver instead of the mink library</span><span class="dec-area">controller</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>About 30 lines of damped least squares inverse kinematics on the 7 arm joints, with the gripper always pointing down and a gentle pull toward a natural elbow pose.</dd>
+        <dt>Why</dt><dd>It worked on the first run, has no library version risk, and returns clear errors like “target unreachable (IK error 4.2 cm)” that the Critic can use.</dd>
+        <dt>Rejected</dt><dd>mink, as listed in the original plan. Still installed; not needed so far.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D05</span><span class="dec-title">Grasp assist, with the real gripper width as a hard limit</span><span class="dec-area">physics · honesty</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>When the gripper closes within 2 cm of an object, an invisible weld holds the object to the hand until the gripper opens. The weld is refused if the object is wider than 7.8 cm across the fingers, because the Panda gripper only opens to 8 cm.</dd>
+        <dt>Why</dt><dd>Pure physical grasping in simulation is fiddly and would make demos flaky. The width limit keeps it realistic: a real coffee mug cannot be picked up, which makes the Tavily sizes matter.</dd>
+        <dt>Disclosure</dt><dd>This will be stated plainly in the README, as planned from day one.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D06</span><span class="dec-title">Schema-constrained JSON output, validated and retried once</span><span class="dec-area">models</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Every model call uses Token Factory's <code>json_schema</code> response format, generated from our Pydantic classes. If the reply still fails validation, the error goes back to the model once.</dd>
+        <dt>Why</dt><dd>Tested both modes. With the schema, Super returned valid output on the first call. Plain JSON mode returned <code>{"": ""}</code>.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D07</span><span class="dec-title">The Critic sees one grid image with reasoning switched off</span><span class="dec-area">models · speed</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The Critic gets one contact sheet of 8 frames instead of 8 separate images, and runs with Nemotron's reasoning disabled.</dd>
+        <dt>Why</dt><dd>With reasoning on, Super VL took 20 to 35 seconds and twice used all 4,000 tokens thinking, returning nothing. With reasoning off it answers in about 3 seconds. In 5 test runs, diagnosis quality was the same.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D08</span><span class="dec-title">The Critic must write its evidence before its diagnosis</span><span class="dec-area">models · quality</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The Critique schema starts with an <code>evidence</code> field. The prompt says sim events are ground truth, and the plan is shown as numbered steps.</dd>
+        <dt>Why</dt><dd>At first the Critic blamed the grasp in about half the runs, even though the log said the grasp worked. Two things fixed it: making the model quote the measurements first, and removing an example from the prompt that it kept copying. After the change, 5 of 5 runs were correct.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D09</span><span class="dec-title">Demo prompts name real products</span><span class="dec-area">Tavily</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The Planner writes searches for concrete products (“Rubik's cube 3x3 dimensions mm weight”). Curated demo prompts use real objects such as a soda can or a tennis ball.</dd>
+        <dt>Why</dt><dd>A search for a generic “red cube” returned tungsten cubes and concrete blocks. Real products return published specs with a source link, which is what the Tavily prize looks for.</dd>
+        <dt>Guardrails</dt><dd>At most 3 searches per run, each cached on disk by query, so repeated runs cost nothing.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D10</span><span class="dec-title">Escalate to Ultra only after a repair has already failed</span><span class="dec-area">cost</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Super builds attempt 1 and does the first repair. Only if that repair also fails does Ultra take over for the remaining attempts.</dd>
+        <dt>Why</dt><dd>Ultra costs about 3 times as much as Super per token. Most failures are simple (wrong height, wrong offset) and Super fixes them. Showing the escalation in the UI also demonstrates the cascade to judges.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D11</span><span class="dec-title">Robot model fetched at a pinned version, not stored in git</span><span class="dec-area">repo</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd><code>scripts/fetch_menagerie.sh</code> downloads only the Panda folder from Menagerie at one fixed commit. The Dockerfile will run the same script.</dd>
+        <dt>Why</dt><dd>The Panda meshes are 33 MB, and every one of them is needed. A pinned fetch keeps the repo small and the scene identical everywhere.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D12</span><span class="dec-title">Spend is logged per call, with a hard stop</span><span class="dec-area">budget</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Each model call appends its model, tokens and dollar cost to <code>.cache/spend.jsonl</code>. Calls are refused once dev spend passes $20.</dd>
+        <dt>Why</dt><dd>The Token Factory credit is $50 and has to cover the live demo through judging. A typical full run costs about $0.003.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D13</span><span class="dec-title">GitHub repo stays private until submission day</span><span class="dec-area">process</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Your call. Making it public is on the Friday checklist, because the rules require a public repo at submission.</dd>
+      </dl></div>
+    </details>
+
+  </div>
+</section>
+
+<!-- ============ FINDINGS ============ -->
+<section>
+  <span class="label">Bugs and surprises found</span>
+  <h2>Things that would have hurt later</h2>
+  <div class="cards">
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>.gitignore</span><p>Comments at the end of a line broke the rules, so <code>runs/</code> and <code>.cache/</code> were never ignored. Videos and cached API results could have been committed.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Mesh paths</span><p>Including the Panda XML from another file made MuJoCo look for meshes in the wrong folder. Loading the scene with MjSpec and attaching objects to it solved it.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Empty Critic replies</span><p>The vision model spent its whole token budget on hidden reasoning. Fixed by turning reasoning off for that step (see D07).</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Empty soda can</span><p>The Grounder gave a soda can 14 g, the weight of an empty can. It is now told to assume objects are in their everyday state.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>LangSmith “invalid token”</span><p>A false alarm: my check script never loaded <code>.env</code>. The key worked all along, and traces were arriving.</p></div>
+    <div class="card"><span class="label"><span class="pill p-ok">fixed</span>Deadline day</span><p>The brief said Thursday Oct 30. Oct 30, 2026 is a Friday, which you confirmed. Both docs are corrected.</p></div>
+  </div>
+</section>
+
+<!-- ============ RISKS ============ -->
+<section>
+  <span class="label">Open risks</span>
+  <h2>Not proven yet</h2>
+  <div class="cards">
+    <div class="card"><span class="label"><span class="pill p-warn">open</span>No natural repair demo</span><p>Real prompts pass on the first try because the Builder follows a reliable pick-and-place pattern. The demo needs one curated task that genuinely fails once and gets repaired.</p></div>
+    <div class="card"><span class="label"><span class="pill p-warn">open</span>Ultra never called</span><p>The escalation path is written but has not run live. Testing it costs about $0.01.</p></div>
+    <div class="card"><span class="label"><span class="pill p-warn">open</span>Linux rendering</span><p>On the Mac, rendering uses CGL. The Nebius container will use EGL or OSMesa, which is untested until deployment tonight.</p></div>
+    <div class="card"><span class="label"><span class="pill p-warn">open</span>Vision model latency</span><p>Fast with reasoning off (about 3 s), but the first call of a session once took 35 s. A slow first call needs a waiting state in the UI.</p></div>
+  </div>
+</section>
+
+<!-- ============ TIMELINE ============ -->
+<section>
+  <span class="label">Schedule</span>
+  <h2>Where we are</h2>
+  <div class="timeline">
+    <div class="day"><span class="label">Tue Oct 27</span><ul>
+      <li class="done">API keys for Token Factory, Tavily, LangSmith; Nebius CLI profile</li>
+      <li class="done">GitHub repo with MIT license (private for now)</li>
+      <li class="done">All 4 Nemotron model IDs confirmed live</li>
+      <li class="done">Headless Franka render test</li>
+    </ul></div>
+    <div class="day"><span class="label">Wed Oct 28 · am</span><ul>
+      <li class="done">Schemas, Planner, Grounder, Builder, Runner, Critic, repair loop</li>
+      <li class="done">LangSmith traces, spend log, 6 simulator tests</li>
+    </ul></div>
+    <div class="day"><span class="label">Wed Oct 28 · pm</span><ul>
+      <li class="now">Web app that streams each step live</li>
+      <li class="now">One-page UI: timeline, model badges, cost, video per attempt, sources</li>
+      <li class="now">4–5 curated prompts, including one that needs a repair</li>
+    </ul></div>
+    <div class="day"><span class="label">Wed Oct 28 · night</span><ul>
+      <li class="todo">Docker image, Nebius Serverless Endpoint (public demo URL)</li>
+      <li class="todo">Batch evaluation as a Nebius Serverless Job</li>
+    </ul></div>
+    <div class="day"><span class="label">Thu Oct 29</span><ul>
+      <li class="todo">README, screenshots, demo video under 3 minutes, Devpost drafts</li>
+    </ul></div>
+    <div class="day"><span class="label">Fri Oct 30</span><ul>
+      <li class="todo">Make repo public, submit by 08:00 PT, leave the endpoint running for judging</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section>
+  <span class="label">Glossary</span>
+  <h2>Terms used in this project</h2>
+  <dl class="gloss">
+    <div><dt>MuJoCo</dt><dd>The physics simulator. Steps the world every 2 ms.</dd></div>
+    <div><dt>Menagerie</dt><dd>DeepMind's collection of ready-made robot models for MuJoCo.</dd></div>
+    <div><dt>MJCF</dt><dd>MuJoCo's XML format for describing a scene.</dd></div>
+    <div><dt>MjSpec</dt><dd>MuJoCo's Python API for building a scene in code instead of writing XML.</dd></div>
+    <div><dt>TCP</dt><dd>Tool center point: the spot between the fingertips that the controller moves.</dd></div>
+    <div><dt>IK</dt><dd>Inverse kinematics: working out joint angles that put the TCP at a target.</dd></div>
+    <div><dt>Weld</dt><dd>A MuJoCo constraint that locks two bodies together. Used for grasp assist.</dd></div>
+    <div><dt>Contact sheet</dt><dd>One image holding 8 timestamped frames of a run, sent to the Critic.</dd></div>
+    <div><dt>Token Factory</dt><dd>Nebius's API for hosted open models, compatible with OpenAI's client.</dd></div>
+    <div><dt>LangSmith</dt><dd>Tracing service. Shows every model call of a run as a tree.</dd></div>
+  </dl>
+</section>
+
+<footer>Source: <code>docs/explainer/index.html</code> in the spec-to-sim repo. Updated as the build progresses.</footer>
+
+</div>
