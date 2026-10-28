@@ -97,7 +97,7 @@ def render(p, i):
 def srt_time(t):
     h, m = int(t // 3600), int(t % 3600 // 60)
     s = t % 60
-    return f"{h:02d}:{m:02d}:{int(s):02d},{min(999, round((s % 1) * 1000)):03d}"
+    return f"{h:02d}:{m:02d}:{int(s):02d},{int(round((s % 1) * 1000)):03d}"
 
 
 def main():

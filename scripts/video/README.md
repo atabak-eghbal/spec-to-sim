@@ -1,5 +1,8 @@
 # Demo video pipeline
 
+v2 (current, 2:41): `capture2.py live|rest|cards` then `narrate.py` then `assemble2.py`
+(burned-in captions, speed/LIVE tags, caption band for UI close-ups). v1 scripts are kept for reference.
+
 Builds the demo video from the running app, with no manual editing:
 
 1. `capture.py`: Playwright drives Chrome; the DevTools screencast records shots of recorded

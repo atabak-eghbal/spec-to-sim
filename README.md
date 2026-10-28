@@ -115,6 +115,7 @@ uv run uvicorn app.main:app          # web app at http://localhost:8000
 - Command line: `uv run python -m spec2sim.cli "Knock over the tower of three wooden toy blocks"`
 - Tests (no API calls): `uv run pytest`
 - Batch eval: `uv run python scripts/eval.py --reps 1`
+- Training data from prompts (the Nebius Serverless Job entrypoint): `uv run python scripts/generate_data.py --episodes 50 "Knock over the tower of three wooden toy blocks"`
 - Docker (CPU only): `docker build -t spec2sim . && docker run -p 8000:8000 --env-file .env spec2sim`
 
 The recorded runs on the landing page replay without any API keys.

@@ -84,7 +84,7 @@ model = robot.compile()   # test your own policy</pre></div>
 def close_card(bg: Path) -> str:
     b64 = base64.b64encode(bg.read_bytes()).decode()
     return f"""<div style="position:absolute;inset:0;background:url(data:image/jpeg;base64,{b64}) center/cover;filter:brightness(0.45)"></div>
-<div class="pad" style="position:relative"><h1>Spec-to-Sim</h1><p class="lede" style="color:#fff;font-size:48px">Describe it. Simulate it. Trust the result.</p>
+<div class="pad" style="position:relative"><h1>Spec-to-Sim</h1><p class="lede" style="color:#fff;font-size:48px">Describe it. Simulate it. Trust it.</p>
 {BADGES}<p class="mono" style="font-size:30px;color:#b9c7d2">MuJoCo · Tavily · LangSmith · github.com/atabak-eghbal/spec-to-sim</p></div>"""
 
 
@@ -101,7 +101,7 @@ def main(tags=()):
             page.set_content(HEAD + body); page.wait_for_timeout(1200)
             page.screenshot(path=str(OUT / f"{name}.png"))
         bg = HERE / "cards/close_bg.jpg"
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-sseof", "-1.5", "-i", str(HERE / "clips/d1_result.mp4"),
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-sseof", "-1.5", "-i", str(HERE / "clips2/c3_result.mp4"),
                         "-frames:v", "1", str(bg)], check=True)
         page.set_content(HEAD + close_card(bg)); page.wait_for_timeout(1200)
         page.screenshot(path=str(OUT / "h_close.png"))

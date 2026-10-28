@@ -12,33 +12,47 @@ from misaki import en
 SAY = {
     "Nemotron": "[Nemotron](/nˈɛmətɹɑn/)", "Nebius": "[Nebius](/nˈɛbiəs/)",
     "MuJoCo": "[MuJoCo](/mjˈuʤˌOkO/)", "Tavily": "[Tavily](/tˈævᵻli/)", "Rubik's": "[Rubik's](/ɹˈubɪks/)",
+    "GR00T": "[GR00T](/ɡɹˈut/)", "Franka": "[Franka](/fɹˈæŋkə/)", "Serverless": "[Serverless](/sˈɜɹvəɹləs/)",
+    "verified": "[verified](/vˈɛɹəfˌId/)", "LeRobot": "[LeRobot](/lə ɹˈObˌɑt/)", "LangSmith": "[LangSmith](/lˈæŋ smˈɪθ/)",
 }
 
 
-VOICE, SPEED = "af_heart", 1.0
+VOICE, SPEED = "af_heart", 1.06
 HERE = Path(__file__).parent
 OUT = HERE / "audio"
 
 SEGMENTS = {
-    "a_hook": "Put the tennis ball and the Rubik's cube in the drawer, and close it. One sentence. "
-              "About a minute later, a robot does it in a physics simulation, and every result is checked.",
-    "b_problem": "Robotics teams spend days building simulation scenes by hand: measuring objects, "
-                 "writing scene files, writing success checks. Spec-to-Sim does it from plain English, "
-                 "with NVIDIA Nemotron models on Nebius Token Factory.",
-    "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. "
-              "Tavily searches the web for each object's real size and weight, and Nemotron Nano reads off "
-              "the numbers, with sources. Super then places the objects and plans the motion, as data, never code. "
-              "MuJoCo runs the simulation, and code, not a model, checks every goal.",
-    "e_repair": "When it fails, it fixes itself. Here the ball was released a centimetre and a half too high, "
-                "and rolled off. Code measures the miss. Nemotron Super V L looks at the frames and explains why. "
-                "Super repairs the plan, and attempt two succeeds. If a repair fails again, it escalates to "
-                "Nemotron Ultra. The first plan passed only twelve of twenty stress tests. The repaired one: all twenty.",
-    "f_beyond": "It goes beyond pick and place: opening drawers, like NVIDIA's Isaac Lab tasks, and knocking "
-                "things over. And every scene exports as a MuJoCo file with its success checks, ready to test "
-                "your own robot policy.",
-    "g_rigor": "Each step shows which model ran it, how long it took, and what it cost. A typical task costs "
-               "about a cent. On our evaluation suite of eleven tasks, every one passes.",
-    "h_close": "Spec-to-Sim. Describe it. Simulate it. Trust the result.",
+    "a_hook": "One sentence in. A robot simulation out: checked by code, repaired by AI when it fails, "
+              "and turned into training data.",
+    "b_problem": "Building one robot test scene by hand takes days: measuring objects, writing scene files, "
+                 "writing success checks. Spec-to-Sim does it from plain English, with NVIDIA Nemotron models "
+                 "on Nebius Token Factory.",
+    "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily searches "
+              "the web for each object's real size and weight, and Nemotron Nano reads off the numbers, with their "
+              "sources. Super places the objects and plans the motion, as data, never code. MuJoCo runs it, and code, "
+              "not a model, checks every goal.",
+    "d_tavily": "Those real facts change outcomes. Here, Tavily found that a large apple is eight point three "
+                "centimetres wide, more than the Panda's gripper can open. So Spec-to-Sim stops in seconds and says "
+                "why, instead of paying for repairs that can't work. And web numbers that make no sense, like a "
+                "two-millimetre lime, are caught and replaced.",
+    "e_repair": "When a plan fails, it fixes itself. On the left, the ball was released a centimetre and a half too "
+                "high, and rolled off. Code measures the miss. Nemotron Super V L looks at the frames and explains "
+                "why, and Super rewrites the plan. On the right, attempt two. If a repair fails again, it escalates "
+                "to Nemotron Ultra.",
+    "f_robust": "But is it robust, or lucky? Every success is re-run sixteen times, with objects nudged, heavier, or "
+                "more slippery. The first plan survived twelve of twenty. The repaired one, all twenty. And you can "
+                "try to break it yourself: drag an object, re-run the same plan, no AI cost.",
+    "g_beyond": "It goes beyond pick and place: opening drawers, like Isaac Lab's Franka drawer task, and knocking "
+                "things over.",
+    "h_data": "Then one click turns a solved task into training data: twenty successful demonstrations with varied "
+              "starts, failures dropped, saved in the LeRobot format that NVIDIA GR00T trains on. The same script is "
+              "packaged to run as a Nebius Serverless Job.",
+    "i_fit": "Where it fits: Isaac Lab Arena turns language into a valid environment spec. Mimic and the GR00T "
+             "blueprint multiply human demonstrations. Spec-to-Sim goes from one sentence to a verified, running "
+             "scene and its demonstrations, no human demo needed, ready to feed those pipelines.",
+    "j_rigor": "Four Nemotron models, each sized to its job. About a cent per task. Eleven of eleven evaluation tasks "
+               "pass, and every call is traced in LangSmith.",
+    "k_close": "Spec-to-Sim. Describe it. Simulate it. Trust it.",
 }
 
 

@@ -56,6 +56,19 @@ nebius ai job create \
 nebius ai job logs <job-id>     # the summary table is printed at the end
 ```
 
+## 4. Job (synthetic training data)
+Same image; one dataset per prompt, LeRobot v2.1 layout. Mount a bucket/volume at /data to keep the output.
+```bash
+nebius ai job create \
+  --parent-id project-u02pyk0wig0082n0cwnqda --name spec2sim-data-$(date +%m%d%H%M) \
+  --image $IMAGE --platform cpu-d3 --preset 4vcpu-16gb --disk-size 30Gi \
+  --subnet-id vpcsubnet-u02ypft8s5q07tntvm --timeout 2h \
+  --container-command python \
+  --args "scripts/generate_data.py --episodes 50 --out /data 'Put the apple and the lime into the fruit basket, and the soda can into the recycling bin' 'Knock over the tower of three wooden toy blocks'" \
+  --env NEBIUS_API_KEY=$NEBIUS_API_KEY --env TAVILY_API_KEY=$TAVILY_API_KEY \
+  --env LANGSMITH_API_KEY=$LANGSMITH_API_KEY --env LANGSMITH_TRACING=true
+```
+
 ## Status (2026-10-28)
 Blocked: `registry create` and `endpoint create --dry-run` return PermissionDenied on the tenant.
 Reads work, so AI Cloud billing/credits are likely not activated yet (Token Factory credits are separate).

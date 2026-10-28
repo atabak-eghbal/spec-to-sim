@@ -30,7 +30,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 COPY app ./app
-COPY scripts/eval.py ./scripts/
+COPY scripts/eval.py scripts/generate_data.py ./scripts/
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"

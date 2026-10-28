@@ -32,7 +32,7 @@ class Shot:
 
     def start(self):
         self.t0 = time.time()
-        self.cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 88, "everyNthFrame": self.every_nth,
+        self.cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 82, "everyNthFrame": self.every_nth,
                                                "maxWidth": int(W * DSF), "maxHeight": int(H * DSF)})
 
     def wait(self, s):
@@ -44,6 +44,10 @@ class Shot:
         self.cdp.send("Page.stopScreencast")
         self.stopped = True
         self.t1 = time.time()
+        if not self.frames:  # a page that never changes sends no screencast frames: use a still
+            p = self.out / "000000.jpg"
+            self.page.screenshot(path=str(p), type="jpeg", quality=90)
+            self.frames.append((p.name, self.t0))
         (self.out / "frames.json").write_text(json.dumps({"frames": self.frames, "t0": self.t0, "t1": self.t1}))
         return self.out
 

@@ -110,6 +110,8 @@ button.run:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent)
 .facts th { font: 500 0.66rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .facts td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl-scroll { overflow-x: auto; }
+.checks { margin: 0.1rem 0 0; padding-left: 1.1rem; font: 400 0.76rem/1.45 var(--mono); color: var(--muted); }
+.checks b { color: var(--ink); font-weight: 500; }
 .src { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .src a { font-size: 0.75rem; border: 1px solid var(--rule); border-radius: 3px; padding: 0.15rem 0.45rem; text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .src a:hover { border-color: var(--accent); }
@@ -351,11 +353,15 @@ function stepBody(s) {
         <p class="mono" style="font-size:.78rem">objects: ${d.objects.map((o) => esc(o.name)).join(", ")}<br>goals: ${d.goals.map((g) => esc(g.type + "(" + [g.obj, g.target].filter(Boolean).join(", ") + (g.xyz ? ", " + g.xyz.join(", ") : "") + ")")).join("  ")}</p>`;
     case "grounder": {
       const rows = d.facts.map((f) => `<tr><td>${esc(f.name)}</td><td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
-        <td>${f.source_url ? `<a href="${esc(f.source_url)}" target="_blank" rel="noopener">source</a>` : `<span class="pill p-warn">estimate</span>`}</td></tr>`).join("");
+        <td>${f.source_url ? `<a href="${esc(f.source_url)}" target="_blank" rel="noopener">source</a>` : /rejected/.test(f.note || "") ? `<span class="pill p-bad">web rejected</span>` : `<span class="pill p-warn">estimate</span>`}</td></tr>`).join("");
+      // Sanity checks on web data, shown so nothing is silently changed.
+      const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit/.test(f.note || ""))
+        .map((f) => `<li><b>${esc(f.name)}</b>: ${esc(f.note)}</li>`).join("");
       const tv = s.tavily || {};
       const srcs = (s.sources || []).map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.title)}</a>`).join("");
       return `<p class="mono" style="font-size:.75rem"><span class="badge b-Tavily">Tavily</span> ${(tv.queries || []).length} searches${tv.cached ? `, ${tv.cached} from cache` : ""} · ${fmtS(tv.latency_s || 0)}</p>
         <div class="tbl-scroll"><table class="facts"><thead><tr><th>Object</th><th>Real size</th><th>Mass</th><th>From</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${checks ? `<ul class="checks">${checks}</ul>` : ""}
         ${srcs ? `<details class="more"><summary>${(s.sources || []).length} web sources</summary><div class="src" style="margin-top:.4rem">${srcs}</div></details>` : ""}`;
     }
     case "builder":
@@ -725,7 +731,7 @@ fetch("/api/examples").then((r) => r.json()).then((ex) => {
 if (new URL(location).searchParams.get("theater") === "1") document.body.classList.add("theater");
 const initial = new URL(location).searchParams.get("run");
 if (initial) follow(initial);
-else fetch("/api/examples").then((r) => r.json()).then((ex) => {
+else if (new URL(location).searchParams.get("hero") !== "0") fetch("/api/examples").then((r) => r.json()).then((ex) => {
   // Landing: play the hero recorded run right away (URL stays clean).
   const hero = (ex.featured || []).find((f) => f.hero) || (ex.featured || [])[0];
   if (!hero || state.runId) return;
