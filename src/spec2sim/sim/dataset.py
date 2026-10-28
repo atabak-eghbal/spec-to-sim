@@ -90,15 +90,18 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
     """Run up to 3x `episodes` perturbed variants; save the first `episodes` successes."""
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
-    kept, tried, t0 = [], 0, time.time()
+    kept, tried, invalid, t0 = [], 0, 0, time.time()
     names = None
-    while len(kept) < episodes and tried < episodes * 3:
-        tried += 1
+    # tried = valid variations simulated; invalid = draws where the jitter made objects overlap at the
+    # start (skipped, not failures).
+    while len(kept) < episodes and tried < episodes * 3 and tried + invalid < episodes * 10:
         b, tweak, _ = perturb(build, rng)
         try:
             sim = _Sim(b, None, tweak=tweak, physics=physics)
         except SceneError:
+            invalid += 1
             continue
+        tried += 1
         col = _Collector(sim, images)
         sim.on_tick = col
         err = _execute(sim, b)
@@ -176,7 +179,7 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
     (root / "meta/episodes.jsonl").write_text("".join(json.dumps(x) + "\n" for x in ep_lines))
     (root / "meta/episodes_stats.jsonl").write_text("".join(json.dumps(x) + "\n" for x in stat_lines))
     (root / "README.md").write_text(
-        f"# Spec-to-Sim generated dataset\n\nTask: \"{prompt}\"\n\n{len(kept)} successful episodes out of {tried} "
+        f"# Spec-to-Sim generated dataset\n\nTask: \"{prompt}\"\n\n{len(kept)} successful episodes out of {tried} valid "
         f"perturbed variants (objects nudged up to 1.5 cm and ~9 deg, mass +-20%, friction +-30%), {FPS} fps, "
         f"Franka Panda (MuJoCo Menagerie) in MuJoCo.\nLayout: LeRobot dataset format {CODEBASE} (parquet + mp4).\n"
         "Grasping uses Spec-to-Sim's grasp assist (a weld when the closed gripper is within 2 cm of an object that fits).\n")
@@ -185,5 +188,6 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
         for f in sorted(root.rglob("*")):
             if f.is_file():
                 z.write(f, f.relative_to(root.parent))
-    return {"episodes": len(kept), "tried": tried, "frames": index, "seconds": round(time.time() - t0, 1),
+    return {"episodes": len(kept), "tried": tried, "skipped_invalid": invalid, "frames": index,
+            "seconds": round(time.time() - t0, 1),
             "zip": str(zpath), "fps": FPS, "images": images}

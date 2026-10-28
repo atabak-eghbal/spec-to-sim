@@ -1,6 +1,10 @@
 # Demo video pipeline
 
-v3 (current, 2:48): `capture2.py rest|cards`, `capture3.py live|drag|tavily|after`, `narrate.py`, `assemble3.py`.
+v4 (current, 2:47): `capture4.py live|replays|after|data|tavily` + `assemble4.py`. Filming mode (`?clean=1`):
+no playback bar or event captions in the 3D view, replays restart at t=0 when filming starts and hold their final
+frame instead of looping. The training-data shot is framed on the dataset panel.
+
+v3 (2:48): `capture2.py rest|cards`, `capture3.py live|drag|tavily|after`, `narrate.py`, `assemble3.py`.
 v3 rules, enforced in code: 3D replays play at most 1.3x; waiting is cut out at 1x with "N s skipped" tags;
 no part may be longer than its footage (no frozen frames); static shots get a slow push-in.
 Captions are burned in and also written as .srt. v1/v2 scripts are kept for reference.

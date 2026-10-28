@@ -506,13 +506,13 @@ function dsShow(j) {
   if (j.state === "running") {
     $("dataset-btn").disabled = true;
     $("dataset-btn").textContent = `Generating… ${j.done}/${j.total}`;
-    $("dataset-msg").textContent = `Re-running the plan with random starts, masses and friction; keeping only successful episodes (${j.tried} tried).`;
+    $("dataset-msg").textContent = `Re-running the plan with random starts, masses and friction; keeping only successful episodes (${j.tried} run so far).`;
   } else if (j.state === "done") {
     clearInterval(dsTimer);
     const r = j.result;
     $("dataset-btn").disabled = false;
     $("dataset-btn").textContent = "Generate again";
-    $("dataset-msg").innerHTML = `<a href="/media/${esc(r.zip)}" download>Download dataset</a>${r.episodes ? ` · ${r.episodes} episodes from ${r.tried} tries, ${r.frames} frames at ${r.fps} fps, ${r.seconds} s` : ""}`;
+    $("dataset-msg").innerHTML = `<a href="/media/${esc(r.zip)}" download>Download dataset</a>${r.episodes ? ` · ${r.episodes} successful episodes from ${r.tried} varied runs, ${r.frames} frames at ${r.fps} fps, ${r.seconds} s` : ""}`;
   } else if (j.state === "error") {
     clearInterval(dsTimer); dsReset();
     $("dataset-msg").textContent = "Failed: " + j.error;

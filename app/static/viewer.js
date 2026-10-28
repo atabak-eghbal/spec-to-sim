@@ -293,7 +293,7 @@ export class SimViewer {
     this.styleBtn.onclick = () => this.setStyle(this.style === "realistic" ? "plain" : "realistic");
     this.range.oninput = () => { this.t = (this.range.value / 1000) * this.duration; this.setPlaying(false); };
     this.renderer.domElement.addEventListener("pointerdown", () => { this.hint.style.opacity = 0; }, { once: true });
-    if (this.clean) this.hint.style.display = "none";
+    if (this.clean) { this.hint.style.display = "none"; bar.style.display = "none"; this.caption.style.display = "none"; } // filming: no controls or event captions
   }
 
   setPlaying(p) {
@@ -467,7 +467,7 @@ export class SimViewer {
   unfollow() {
     if (this.master) this.master.followers = this.master.followers.filter((f) => f !== this);
     this.master = null;
-    this.el.querySelector(".v-bar").style.display = "";
+    this.el.querySelector(".v-bar").style.display = this.clean ? "none" : "";
   }
 
   // Ghost: another attempt's objects drawn translucent in this scene, on the same clock.
@@ -542,7 +542,7 @@ export class SimViewer {
       if (this.playing && !this.master) {
         this.t += dt * this.speed;
         const span = Math.max(this.duration, ...this.followers.map((f) => f.duration || 0));
-        if (this.t > span + 1.6) this.t = 0; // hold on the final state, then loop
+        if (this.t > span + 1.6) this.t = this.clean ? span + 1.6 : 0; // hold the final state, then loop (filming: hold)
       }
       const t = Math.min(this.t, this.duration);
       if (!this.editing) this.#pose(this.#frameAt(t));

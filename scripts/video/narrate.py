@@ -28,9 +28,9 @@ SEGMENTS = {
                  "writing success checks. Spec-to-Sim does it from plain English, with NVIDIA Nemotron models "
                  "on Nebius Token Factory.",
     "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily grounds "
-              "every object in real sizes. Super places the objects and plans the motion, as data, never code. MuJoCo "
-              "runs it, and code checks every goal. Here the first scene put a bin out of reach. The Critic caught it, "
-              "Super fixed it, and attempt two passes.",
+              "every object in real sizes, with photos. Super places the objects and plans the motion, as data, never "
+              "code. MuJoCo runs it, code checks every goal, and a stress test re-runs the plan sixteen times. "
+              "Sixteen out of sixteen.",
     "d_tavily": "Tavily is the reality check. Every size is cross-checked across sources, with photos and links. "
                 "Friction and bounciness come from the web too, and MuJoCo uses them, so a rubber ball behaves like one. "
                 "Even the robot's limits come from Franka's datasheet. When the web says a grapefruit is eighteen "

@@ -1,4 +1,4 @@
-# Demo video (v3, 2:48)
+# Demo video (v4, 2:47)
 
 Built automatically by `scripts/video/` (Playwright capture of the running app, Kokoro narration,
 ffmpeg assembly with burned-in captions and an .srt for YouTube). Every claim is backed by a recorded
@@ -17,6 +17,10 @@ run or a test. At least 1 minute of the key modules in action (0:22 to 1:50 is c
 | 2:07 | Where it fits at NVIDIA | Animated comparison: Isaac Lab-Arena · Mimic/GR00T blueprint · Spec-to-Sim | Impact for NVIDIA |
 | 2:25 | Rigor | Pipeline strip with costs; 11/11 eval card | Technological Implementation |
 | 2:36 | Close | Title over the final 3D frame | |
+
+v4 fixes (from review of v3): replays no longer loop mid-shot (they hold their final frame), no playback bar or
+event captions in 3D shots, training-data shot centred on the dataset panel; the live take was a first-try
+success (16/16), so its narration no longer mentions a repair (Before / after covers self-repair).
 
 v3 fixes (from review of v2): no frozen frames (no shot stretched past its footage; static shots push in slowly),
 no rushed footage (3D at most 1.3x; waiting removed by labelled jump cuts instead of 8-10x fast-forward).
