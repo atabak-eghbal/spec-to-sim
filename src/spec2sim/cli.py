@@ -59,6 +59,9 @@ def main() -> None:
                     print(f"  {'PASS' if g['ok'] else 'FAIL'} {g['detail']}")
                 for e in d["events"]:
                     print(f"  · {e}")
+            elif step == "stress":
+                print(f"  robust in {d['passed']}/{d['trials']} perturbed re-runs ({d['seconds']}s): "
+                      + ", ".join(f"{p['goal']['type']} {p['goal']['obj']} {p['passed']}/{d['trials']}" for p in d["per_goal"]))
             elif step == "critic":
                 print(f"  [{d['category']}] {d['what_happened']}\n  cause: {d['root_cause']}\n  fix: {d['suggested_fix']}")
             if args.verbose:

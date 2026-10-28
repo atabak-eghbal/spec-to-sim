@@ -3,6 +3,9 @@
 `run_task` is a generator of plain-dict events (JSON-serializable) so the CLI can print them and
 the FastAPI app can stream them over SSE unchanged.
 
+After a success, the plan is stress-tested: re-simulated under random perturbations (start pose,
+mass, friction) with no model calls, like Isaac Lab-Arena's sensitivity analysis.
+
 Escalation policy (docs/architecture.md): attempt 1 is built by Super. After a failure the VL
 Critic diagnoses it; the first repair uses Super, later repairs escalate to Ultra. Max
 MAX_ITERATIONS attempts in total.
@@ -40,9 +43,10 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> str | None:
     """
     shapes = {o.name: o.shape for o in task.objects}
     sizes = {f.name: f.size for f in facts.facts}
-    movers = {g.obj for g in task.goals if g.type != "upright"}
+    # Only objects that must be picked up need to fit the gripper (pushing or knocking over doesn't).
+    movers = {g.obj for g in task.goals if g.type not in ("upright", "toppled", "opened", "closed")}
     for name in sorted(movers):
-        if name not in sizes or shapes.get(name) == "bin":
+        if name not in sizes or shapes.get(name) in ("bin", "drawer"):
             continue
         sx, sy, _ = sizes[name]
         width = min(sx, sy) if shapes.get(name) == "box" else max(sx, sy)
@@ -96,6 +100,9 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
 
     result = None
     for attempt in range(1, max_it + 1):
+        b, notes = fit_furniture(b)
+        for n in notes:
+            yield _ev("note", message=n)
         yield _ev("step", step="runner", status="running", attempt=attempt)
         result = _traced_run(b, task.goals, out / f"attempt{attempt}", {o.name for o in task.objects})
         yield _ev("step", step="runner", status="done", attempt=attempt, data=_public(result, run_id))
@@ -126,8 +133,37 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
         yield _ev("step", step="repair", status="done", attempt=attempt + 1, stats=_stats(st),
                   escalated=m is config.ULTRA, data=b.model_dump())
 
+    if result and result.success and config.STRESS_TRIALS > 0:
+        yield _ev("step", step="stress", status="running", trials=config.STRESS_TRIALS)
+        st = _traced_stress(b, task.goals, config.STRESS_TRIALS)
+        yield _ev("step", step="stress", status="done", data=st)
+
     yield _ev("done", success=bool(result and result.success), attempts=attempt,
               total_cost_usd=round(total_cost, 6))
+
+
+def fit_furniture(b) -> tuple[object, list[str]]:
+    """Move a drawer cabinet into the x range where its handle can be pulled open within reach.
+    Deterministic, like rescaling bins: models often ignore this placement rule. Returns the build
+    and a note per change (shown in the UI)."""
+    from spec2sim.sim.scene import DRAWER_BACK_SLACK, DRAWER_PULL, HANDLE_STANDOFF, WORKSPACE
+    notes, objs = [], []
+    for o in b.objects:
+        if o.shape == "drawer":
+            hx = o.size[0] / 2
+            lo = WORKSPACE["x"][0] + DRAWER_PULL + hx + HANDLE_STANDOFF
+            hi = WORKSPACE["x"][1] + DRAWER_BACK_SLACK - hx
+            x = min(max(o.pos[0], lo), hi) if lo <= hi else o.pos[0]
+            if abs(x - o.pos[0]) > 1e-4 or o.yaw:
+                notes.append(f"moved {o.name} to x={x:.2f} m (yaw 0) so its handle can be pulled open within reach")
+                o = o.model_copy(update={"pos": (round(x + 0.002 * (x < hi), 4), o.pos[1], o.pos[2]), "yaw": 0.0})
+        objs.append(o)
+    return b.model_copy(update={"objects": objs}), notes
+
+
+@traceable(name="stress_test", run_type="tool")
+def _traced_stress(b, goals, trials: int) -> dict:
+    return runner.stress_test(b, goals, trials=trials)
 
 
 @traceable(name="runner", run_type="tool")

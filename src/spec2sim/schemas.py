@@ -25,14 +25,15 @@ RGBA = tuple[float, float, float, float]
 class ObjectSpec(BaseModel):
     name: str = Field(description="snake_case id, e.g. red_cube")
     description: str = Field(description="what the real object is, e.g. 'wooden toy block'")
-    shape: Literal["box", "cylinder", "sphere", "bin"] = Field(
-        description="bin = open-top container (tray, basket, storage bin) other objects go into")
+    shape: Literal["box", "cylinder", "sphere", "bin", "drawer"] = Field(
+        description="bin = open-top container (tray, basket, storage bin) other objects go into; "
+                    "drawer = small cabinet with one sliding drawer that has a handle")
     color: str = Field(description="plain color name, e.g. red")
     approx_size_cm: Vec3 = Field(description="your own rough guess of its typical real size in cm "
                                              "(x, y, z); cylinder/sphere: (d, d, h). Used to sanity-check web data")
 
 
-GoalType = Literal["on", "inside", "at", "lifted", "upright",
+GoalType = Literal["on", "inside", "at", "lifted", "upright", "toppled", "opened", "closed",
                    "left_of", "right_of", "in_front_of", "behind"]
 
 
@@ -44,8 +45,9 @@ class Goal(BaseModel):
     """
 
     type: GoalType = Field(
-        description="on: obj rests on top of target; inside: obj is in target bin; at: obj near xyz; "
-                    "lifted: obj held above floor; upright: obj not tipped over; "
+        description="on: obj rests on top of target; inside: obj is in target bin or drawer; at: obj near xyz; "
+                    "lifted: obj held above floor; upright: obj not tipped over; toppled: obj knocked over or "
+                    "down from where it started; opened/closed: obj is a drawer pulled open / pushed shut; "
                     "left_of/right_of/in_front_of/behind: obj relative to target, robot's view")
     obj: str
     target: str | None = Field(None, description="object name, for on/inside/left_of/right_of/in_front_of/behind")
@@ -65,15 +67,21 @@ class TaskSpec(BaseModel):
     def _goals_reference_objects(self) -> TaskSpec:
         """Every goal must name declared objects; a bad reference goes back to the model to fix."""
         names = {o.name for o in self.objects}
-        bins = {o.name for o in self.objects if o.shape == "bin"}
+        bins = {o.name for o in self.objects if o.shape in ("bin", "drawer")}
+        drawers = {o.name for o in self.objects if o.shape == "drawer"}
         for g in self.goals:
             for ref in (g.obj, g.target):
                 if ref is not None and ref not in names:
                     raise ValueError(f"goal {g.type} refers to '{ref}', which is not one of the objects {sorted(names)}")
             if g.type == "inside" and g.target not in bins:
-                raise ValueError(f"'inside' goal target '{g.target}' must be an object with shape 'bin'")
-            if g.obj in bins:
-                raise ValueError(f"'{g.obj}' is a bin (fixed in place); goals must move the other objects")
+                raise ValueError(f"'inside' goal target '{g.target}' must be an object with shape 'bin' or 'drawer'")
+            if g.type in ("opened", "closed") and g.obj not in drawers:
+                raise ValueError(f"'{g.type}' goal needs obj to be a 'drawer' object, got '{g.obj}'")
+            if g.type == "opened" and any(h.type == "closed" and h.obj == g.obj for h in self.goals):
+                raise ValueError(f"'{g.obj}' has both 'opened' and 'closed' goals; goals describe only the FINAL "
+                                 "state (for 'open it, put X in, close it' use inside + closed)")
+            if g.obj in bins and g.type not in ("opened", "closed"):
+                raise ValueError(f"'{g.obj}' is fixed in place; only 'opened'/'closed' goals can name it")
             if g.type == "at" and (g.xyz is None or not reachable_xy(g.xyz[0], g.xyz[1])):
                 raise ValueError(f"'at' goal xyz {g.xyz} is outside the robot's reach: x {REACH_X}, "
                                  f"y {REACH_Y} m (the robot base is at 0,0)")
@@ -101,7 +109,7 @@ class Source(BaseModel):
 # ---------- 3. Builder ----------
 class SceneObject(BaseModel):
     name: str
-    shape: Literal["box", "cylinder", "sphere", "bin"]
+    shape: Literal["box", "cylinder", "sphere", "bin", "drawer"]
     size: Vec3 = Field(description="full extents in meters (x, y, z); cylinder/sphere: (d, d, h); "
                                    "bin: outer extents, open at the top")
     mass: float

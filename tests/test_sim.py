@@ -118,3 +118,54 @@ def test_browser_replay_files(tmp_path: Path):
     export_meshes(build_scene(_cubes()).model, tmp_path / "viz")
     manifest = json.loads((tmp_path / "viz/meshes.json").read_text())
     assert {g["mesh"] for g in meta["geoms"] if g["mesh"]} <= set(manifest)
+
+
+def _drawer_scene():
+    cab = SceneObject(name="cab", shape="drawer", size=(0.2, 0.24, 0.12), mass=1, rgba=(0.55, 0.42, 0.3, 1),
+                      pos=(0.6, -0.05, 0.06))
+    cube = SceneObject(name="cube", shape="box", size=(C,) * 3, mass=0.1, rgba=(0.9, 0.2, 0.2, 1), pos=(0.45, 0.25, C / 2))
+    return [cab, cube]
+
+
+def _drawer_plan() -> MotionPlan:
+    Y = 1.5708
+    grab = lambda: [Action(op="move_to", object="cab.handle", offset=(0, 0, 0.1)),
+                    Action(op="move_to", object="cab.handle", duration=0.6), Action(op="close", duration=0.4)]
+    leave = lambda: [Action(op="open", duration=0.3), Action(op="move_to", object="cab.handle", offset=(0, 0, 0.12), duration=0.6)]
+    return MotionPlan(actions=[
+        *grab(), Action(op="move_to", object="cab.open", duration=1.5), *leave(),
+        Action(op="move_to", object="cube", offset=(0, 0, 0.12)), Action(op="move_to", object="cube", duration=0.6),
+        Action(op="close", duration=0.4), Action(op="move_to", object="cube", offset=(0, 0, 0.18), duration=0.7),
+        Action(op="move_to", object="cab.slot", offset=(0, 0, C / 2 + 0.15), yaw=Y),
+        Action(op="move_to", object="cab.slot", offset=(0, 0, C / 2 + 0.02), yaw=Y, duration=0.6),
+        Action(op="open", duration=0.3), Action(op="move_to", object="cab.slot", offset=(0, 0, 0.2), yaw=Y, duration=0.6),
+        *grab(), Action(op="move_to", object="cab.closed", duration=1.5), *leave(),
+    ])
+
+
+def test_drawer_open_put_inside_close(tmp_path: Path):
+    goals = [Goal(type="inside", obj="cube", target="cab"), Goal(type="closed", obj="cab")]
+    r = run(Build(objects=_drawer_scene(), plan=_drawer_plan(), rationale="drawer task"), goals, tmp_path)
+    assert r.success, (r.goals, r.events)
+    assert any("grasped cab handle" in e for e in r.events)
+    assert any("drawer is 1" in e and "cm open" in e for e in r.events)  # pulled ~10-12 cm
+
+
+def test_knock_over_tower(tmp_path: Path):
+    tower = [_obj(n, (0.5, 0.0, C / 2 + i * C)) for i, n in enumerate(("b1", "b2", "b3"))]
+    plan = MotionPlan(actions=[Action(op="close", duration=0.3),
+                               Action(op="move_to", xyz=(0.5, 0.11, 2.5 * C), duration=1.2),
+                               Action(op="move_to", xyz=(0.5, -0.15, 2.5 * C), duration=0.45)])
+    r = run(Build(objects=tower, plan=plan, rationale="knock it over"), [Goal(type="toppled", obj="b3")], tmp_path)
+    assert r.success, (r.goals, r.events)
+    idle = run(Build(objects=tower, plan=MotionPlan(actions=[Action(op="wait", duration=0.5)]), rationale="do nothing"),
+               [Goal(type="toppled", obj="b3")], tmp_path / "idle")
+    assert not idle.success
+
+
+def test_stress_test_separates_good_and_bad_plans():
+    from spec2sim.sim.runner import stress_test
+    good = stress_test(Build(objects=_cubes(), plan=_stack_plan(C + 0.003), rationale="reference"), ON, trials=6)
+    bad = stress_test(Build(objects=_cubes(), plan=_stack_plan(0.18, place_dx=0.03), rationale="drops"), ON, trials=6)
+    assert good["trials"] == 6 and good["passed"] == 6
+    assert bad["passed"] == 0

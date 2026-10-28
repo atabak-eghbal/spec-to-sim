@@ -51,6 +51,118 @@ function label(text) {
   return d;
 }
 
+
+// ---------- realistic skins ----------
+// Physics uses simple shapes; in "realistic" style the browser dresses them by what the object is
+// (matched on its name), with procedural canvas textures. No image files, no brand marks.
+const texCache = new Map();
+function canvasTex(key, w, h, draw, repeat = null) {
+  if (texCache.has(key)) return texCache.get(key);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); }
+  texCache.set(key, t);
+  return t;
+}
+const css = (rgb, k = 1) => `rgb(${rgb.map((v) => Math.round(Math.min(1, v * k) * 255)).join(",")})`;
+let seed = 1;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+const wood = (rgb, painted) => canvasTex(`wood${rgb}${painted}`, 256, 256, (g, w, h) => {
+  seed = 7;
+  g.fillStyle = css(rgb); g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 46; i++) {
+    const y = rnd() * h, amp = 2 + rnd() * 6;
+    g.strokeStyle = `rgba(${painted ? "255,255,255" : "60,30,10"},${painted ? 0.05 + rnd() * 0.06 : 0.08 + rnd() * 0.12})`;
+    g.lineWidth = 0.6 + rnd() * 2;
+    g.beginPath();
+    for (let x = 0; x <= w; x += 8) g.lineTo(x, y + Math.sin(x / (18 + i)) * amp);
+    g.stroke();
+  }
+});
+const rubikFace = (color) => canvasTex(`rubik${color}`, 192, 192, (g) => {
+  g.fillStyle = "#111"; g.fillRect(0, 0, 192, 192);
+  g.fillStyle = color;
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    g.beginPath(); g.roundRect(8 + i * 61, 8 + j * 61, 54, 54, 8); g.fill();
+  }
+});
+const canLabel = (rgb) => canvasTex(`can${rgb}`, 512, 256, (g, w, h) => {
+  g.fillStyle = css(rgb, 0.9); g.fillRect(0, 0, w, h);
+  g.fillStyle = "rgba(255,255,255,0.9)";
+  g.beginPath(); g.moveTo(0, h * 0.62);
+  for (let x = 0; x <= w; x += 8) g.lineTo(x, h * 0.58 + Math.sin(x / 40) * 14);
+  g.lineTo(w, h * 0.7); for (let x = w; x >= 0; x -= 8) g.lineTo(x, h * 0.68 + Math.sin(x / 40) * 14);
+  g.fill();
+  g.fillStyle = "rgba(255,255,255,0.95)"; g.font = "bold 64px Archivo, Arial, sans-serif"; g.textAlign = "center";
+  g.fillText("SODA", w * 0.3, h * 0.45); g.fillText("SODA", w * 0.8, h * 0.45);
+  const metal = g.createLinearGradient(0, 0, 0, h);
+  metal.addColorStop(0, "#c9ced3"); metal.addColorStop(0.06, "#8d949b"); metal.addColorStop(0.1, "rgba(0,0,0,0)");
+  metal.addColorStop(0.9, "rgba(0,0,0,0)"); metal.addColorStop(0.94, "#8d949b"); metal.addColorStop(1, "#c9ced3");
+  g.fillStyle = metal; g.fillRect(0, 0, w, h);
+});
+const canTop = () => canvasTex("cantop", 128, 128, (g) => {
+  const r = g.createRadialGradient(64, 64, 10, 64, 64, 64);
+  r.addColorStop(0, "#d9dde1"); r.addColorStop(0.75, "#a8afb6"); r.addColorStop(0.85, "#e9ecef"); r.addColorStop(1, "#80878e");
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = "#6f767d"; g.beginPath(); g.ellipse(64, 46, 16, 9, 0, 0, Math.PI * 2); g.fill();
+});
+const tennis = () => canvasTex("tennis", 512, 256, (g, w, h) => {
+  seed = 3;
+  g.fillStyle = "#d7e84a"; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? "255,255,200" : "120,140,20"},0.18)`; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
+  g.strokeStyle = "rgba(255,255,255,0.95)"; g.lineWidth = 7;
+  g.beginPath(); for (let x = 0; x <= w; x += 4) g.lineTo(x, h / 2 + Math.sin((x / w) * Math.PI * 4) * h * 0.28); g.stroke();
+});
+const speckled = (rgb, spot, n) => canvasTex(`speck${rgb}${spot}`, 256, 128, (g, w, h) => {
+  seed = 11;
+  g.fillStyle = css(rgb); g.fillRect(0, 0, w, h);
+  for (let i = 0; i < n; i++) { g.fillStyle = spot; g.globalAlpha = 0.15 + rnd() * 0.25; g.beginPath(); g.arc(rnd() * w, rnd() * h, 0.6 + rnd() * 1.4, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+});
+const wicker = (rgb) => canvasTex(`wicker${rgb}`, 128, 128, (g) => {
+  g.fillStyle = css(rgb, 0.7); g.fillRect(0, 0, 128, 128);
+  for (let y = 0; y < 128; y += 16) for (let x = 0; x < 128; x += 16) {
+    const odd = ((x + y) / 16) % 2;
+    g.fillStyle = css(rgb, odd ? 1.15 : 0.95);
+    g.beginPath(); g.roundRect(x + (odd ? 1 : 3), y + (odd ? 3 : 1), odd ? 14 : 10, odd ? 10 : 14, 4); g.fill();
+  }
+}, [1.2, 1.2]);
+
+const RUBIK = ["#c41e3a", "#ff8c1a", "#ffffff", "#ffd500", "#009e60", "#0051ba"];
+function std(opts) { return new THREE.MeshStandardMaterial(opts); }
+
+// Returns a material (or material array) for an object geom, plus optional extra child meshes.
+function realistic(g) {
+  const n = (g.object || "").toLowerCase(), rgb = g.rgba.slice(0, 3);
+  const base = g.object.split("/")[0];
+  if (/rubik/.test(n) && g.type === "box") return { mat: RUBIK.map((c) => std({ map: rubikFace(c), roughness: 0.35 })) };
+  if (/(can|soda|cola|beer)/.test(n) && g.type === "cylinder")
+    return { mat: [std({ map: canLabel(rgb), roughness: 0.3, metalness: 0.55 }), std({ map: canTop(), roughness: 0.25, metalness: 0.85 }), std({ map: canTop(), roughness: 0.25, metalness: 0.85 })] };
+  if (/tennis/.test(n)) return { mat: std({ map: tennis(), roughness: 1 }) };
+  if (/apple/.test(n) && g.type === "sphere") {
+    const r = g.size[0];
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.05, r * 0.07, r * 0.45, 8), std({ color: 0x5a3b1e, roughness: 0.9 }));
+    stem.rotation.x = Math.PI / 2; stem.position.z = r * 1.05;
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(r * 0.22, 12, 8), std({ color: 0x3f8f3a, roughness: 0.6 }));
+    leaf.scale.set(1, 0.45, 0.12); leaf.position.set(r * 0.18, 0, r * 1.12); leaf.rotation.y = -0.6;
+    return { mat: std({ map: speckled(rgb, "#ffe9a0", 500), roughness: 0.4 }), scale: [1, 1, 0.9], extras: [stem, leaf] };
+  }
+  if (/(lime|orange|lemon|citrus|mandarin)/.test(n)) return { mat: std({ map: speckled(rgb, "#ffffff", 900), roughness: 0.7 }) };
+  if (/basket/.test(n)) return { mat: std({ map: wicker(rgb), roughness: 0.9 }) };
+  if (/(drawer|cabinet|organizer)/.test(n) && g.type === "box") {
+    const small = Math.max(...g.size) <= 0.06 && Math.min(...g.size) <= 0.009; // handle bar and its posts
+    return { mat: small ? std({ color: 0xb8bcc0, roughness: 0.25, metalness: 0.9 })
+                        : std({ map: wood(rgb, Math.min(...rgb) > 0.7), roughness: 0.7 }) };
+  }
+  if (/(block|cube|brick)/.test(n) && g.type === "box") return { mat: std({ map: wood(rgb, true), roughness: 0.55 }), bevel: true };
+  if (/(bin|tray|box|container)/.test(base)) return { mat: std({ color: new THREE.Color(...rgb).convertSRGBToLinear(), roughness: 0.55, metalness: 0.0 }) };
+  return null;
+}
+
 export class SimViewer {
   constructor(container) {
     this.el = container;
@@ -80,7 +192,7 @@ export class SimViewer {
     this.#ui();
     this.root = new THREE.Group();
     this.scene.add(this.root);
-    this.playing = true; this.t = 0; this.speed = 1; this.last = performance.now();
+    this.playing = true; this.t = 0; this.speed = 1; this.last = performance.now(); this.style = "realistic";
     new ResizeObserver(() => this.#resize()).observe(this.el);
     this.#resize();
     this.renderer.setAnimationLoop(() => this.#tick());
@@ -133,7 +245,8 @@ export class SimViewer {
     bar.innerHTML = `<button type="button" class="v-play" aria-label="Pause">❚❚</button>
       <div class="v-track"><input type="range" min="0" max="1000" value="0" aria-label="Timeline"><div class="v-marks"></div></div>
       <span class="v-time mono">0.0 s</span>
-      <button type="button" class="v-speed" aria-label="Playback speed">1×</button>`;
+      <button type="button" class="v-speed" aria-label="Playback speed">1×</button>
+      <button type="button" class="v-style" aria-label="Switch between realistic and plain objects">Realistic</button>`;
     this.el.appendChild(bar);
     this.caption = label("");
     this.el.appendChild(this.caption);
@@ -149,6 +262,8 @@ export class SimViewer {
       this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 0.5 : 1;
       e.target.textContent = `${this.speed}×`;
     };
+    this.styleBtn = bar.querySelector(".v-style");
+    this.styleBtn.onclick = () => this.setStyle(this.style === "realistic" ? "plain" : "realistic");
     this.range.oninput = () => { this.t = (this.range.value / 1000) * this.duration; this.setPlaying(false); };
     this.renderer.domElement.addEventListener("pointerdown", () => { this.hint.style.opacity = 0; }, { once: true });
   }
@@ -167,28 +282,14 @@ export class SimViewer {
       fetch(url).then((r) => r.json()), fetch(base + "traj.bin").then((r) => r.arrayBuffer()), loadMeshes()]);
     if (url !== this.url) return; // a newer load started meanwhile
     this.meta = meta;
+    this.meshes = meshes;
     this.traj = new Float32Array(buf);
     this.nb = meta.bodies.length;
     this.duration = meta.times.length ? meta.times[meta.times.length - 1] : 0;
     this.root.clear();
     this.bodies = meta.bodies.map(() => { const g = new THREE.Group(); this.root.add(g); return g; });
-    const mats = new Map();
-    for (const g of meta.geoms) {
-      const key = g.rgba.join(",") + (g.object ? "o" : "");
-      if (!mats.has(key)) {
-        mats.set(key, new THREE.MeshStandardMaterial({
-          color: new THREE.Color(g.rgba[0], g.rgba[1], g.rgba[2]).convertSRGBToLinear(),
-          roughness: g.object ? 0.45 : 0.38, metalness: g.object ? 0.0 : 0.08,
-          transparent: g.rgba[3] < 1, opacity: g.rgba[3] }));
-      }
-      const geo = g.type === "mesh" ? meshes[g.mesh] : primitive(g);
-      if (!geo) continue;
-      const mesh = new THREE.Mesh(geo, mats.get(key));
-      mesh.position.set(...g.pos);
-      mesh.quaternion.copy(quat(g.quat));
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      this.bodies[g.body].add(mesh);
-    }
+    this.#build();
+
     this.events = (meta.events || []).map((e) => {
       const m = /^t=([\d.]+)s (.*)$/.exec(e);
       return m ? { t: parseFloat(m[1]), text: m[2] } : null;
@@ -217,6 +318,43 @@ export class SimViewer {
     this.t = Number.isFinite(t0) ? t0 : 0;
     this.setPlaying(!Number.isFinite(t0));
     this.#pose(this.#frameAt(this.t));
+  }
+
+  // Geometry and materials for the current run, in the current style ("realistic" or "plain").
+  #build() {
+    const meta = this.meta;
+    for (const b of this.bodies) b.clear();
+    const mats = new Map();
+    for (const g of meta.geoms) {
+      const geo = g.type === "mesh" ? this.meshes[g.mesh] : primitive(g);
+      if (!geo) continue;
+      const skin = this.style === "realistic" && g.object ? realistic(g) : null;
+      let mat = skin?.mat;
+      if (!mat) {
+        const key = g.rgba.join(",") + (g.object ? "o" : "");
+        if (!mats.has(key)) {
+          mats.set(key, new THREE.MeshStandardMaterial({
+            color: new THREE.Color(g.rgba[0], g.rgba[1], g.rgba[2]).convertSRGBToLinear(),
+            roughness: g.object ? 0.45 : 0.38, metalness: g.object ? 0.0 : 0.08,
+            transparent: g.rgba[3] < 1, opacity: g.rgba[3] }));
+        }
+        mat = mats.get(key);
+      }
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(...g.pos);
+      mesh.quaternion.copy(quat(g.quat));
+      if (skin?.scale) mesh.scale.set(...skin.scale);
+      for (const x of skin?.extras || []) { x.castShadow = true; mesh.add(x); }
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      this.bodies[g.body].add(mesh);
+    }
+  }
+
+  setStyle(style) {
+    if (style === this.style) return;
+    this.style = style;
+    if (this.styleBtn) this.styleBtn.textContent = style === "realistic" ? "Realistic" : "Plain";
+    if (this.meta) this.#build();
   }
 
   #frameAt(t) {

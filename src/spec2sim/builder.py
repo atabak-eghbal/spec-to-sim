@@ -33,7 +33,16 @@ center x <= {WORKSPACE['x'][1]} - size_x/2, |center y| <= {WORKSPACE['y'][1]} - 
 GRIPPER: always points straight down. The controller tracks the tool point (TCP) = the center
 between the fingertips. Fingers open to 8 cm total: an object can only be grasped if its width
 across the fingers is <= 7.8 cm. `yaw` (radians) rotates the gripper about z; yaw=0 closes the
-fingers along the world y axis.
+fingers along the world x axis (toward/away from the robot), yaw=1.5708 along y.
+
+DRAWERS (shape "drawer"): a fixed cabinet whose open front faces the robot; its drawer slides out
+toward the robot (-x). yaw must be 0. Put the cabinet center at x = 0.48 + size_x/2 + 0.02 (so the
+pulled-out handle stays in reach) and keep 15 cm free in front of it. Anchors usable as move_to "object", written as the drawer's real name + anchor (for a
+drawer named desk_drawer: "desk_drawer.handle"): ".handle" (the handle now), ".open" (where the
+handle is when the drawer is pulled 12 cm out), ".closed" (where it is when shut), ".slot" (the
+floor of the part of the drawer that is out of the cabinet: drop objects there). Below, D stands
+for the drawer's name.
+OBJECTS MAY START STACKED (e.g. a tower to knock over): pos z = (height of what is below) + size_z/2.
 
 ACTIONS (executed in order):
 - {{"op":"move_to","object":NAME,"offset":[dx,dy,dz]}} move TCP to NAME's CURRENT center + offset
@@ -63,6 +72,20 @@ DROP INTO A BIN: same steps 1-4, then
 7. open, 8. move_to BIN offset [0,0,h_bin/2 + 0.25] (retreat)
 Use a different [dx,dy] (a few cm, inside the bin's inner area) for each object so they don't
 land on each other. Lifting to 0.18 in step 4 keeps the carried object clear of other objects.
+
+OPEN A DRAWER D: move_to D.handle offset [0,0,0.10] (1.0 s); move_to D.handle offset [0,0,0] (0.6 s);
+close (0.4 s); move_to D.open (1.5 s); open (0.3 s); move_to D.handle offset [0,0,0.12] (0.6 s).
+CLOSE IT: the same with D.closed instead of D.open.
+PUT A INTO AN OPEN DRAWER: steps 1-4 of pick-and-place, then move_to D.slot offset
+[0,0,h_A/2 + 0.15] with yaw 1.5708 (1.0 s), move_to D.slot offset [0,0,h_A/2 + 0.02] yaw 1.5708
+(0.6 s), open, move_to D.slot offset [0,0,0.2] yaw 1.5708. (yaw 1.5708 keeps the wide hand clear
+of the cabinet top.) Two objects go side by side across the drawer's width: D.slot offsets
+[0,+0.045,...] and [0,-0.045,...]. Then close the drawer if the task asks.
+
+KNOCK OVER / PUSH (no grasp): close the gripper first (fingers together, nothing grasped), move_to
+the side of the object opposite to where it should go, at about 60% of its height, 6 cm from its
+surface (0.8 s), then move_to straight through it to 12 cm past its far side at the same height,
+fast (0.4-0.5 s). For a stack, sweep through the TOP object.
 Return JSON only."""
 
 

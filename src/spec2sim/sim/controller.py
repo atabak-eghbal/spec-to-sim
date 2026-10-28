@@ -12,7 +12,7 @@ from __future__ import annotations
 import mujoco
 import numpy as np
 
-from spec2sim.sim.scene import OBJ_PREFIX, Scene
+from spec2sim.sim.scene import BIN_WALL, DRAWER_PULL, DRAWER_TRAVEL, OBJ_PREFIX, Scene
 
 HOME_Q = np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853])
 GRIP_OPEN, GRIP_CLOSED = 255.0, 0.0
@@ -89,9 +89,35 @@ class Controller:
         return q
 
     def object_pos(self, name: str) -> np.ndarray:
-        if name not in self.s.objects:
+        """World position of an object's center, or of a drawer anchor:
+        '<drawer>.handle' = the handle bar now; '<drawer>.open' / '.closed' = where the handle will be
+        with the drawer pulled DRAWER_PULL out / shut; '<drawer>.slot' = floor of the part of the
+        drawer currently outside the cabinet (where an object can be dropped in)."""
+        base, _, anchor = name.partition(".")
+        drawers = [n for n, o in self.s.objects.items() if o.shape == "drawer"]
+        if base not in self.s.objects and anchor and len(drawers) == 1:
+            base = drawers[0]  # tolerate the prompt's placeholder ("D.handle") when there is one drawer
+        if base not in self.s.objects:
             raise IKError(f"plan refers to unknown object '{name}'")
-        return self.d.body(OBJ_PREFIX + name).xpos.copy()
+        o = self.s.objects[base]
+        if anchor and o.shape != "drawer":
+            raise IKError(f"'{name}': only drawers have anchors (.handle, .open, .closed, .slot)")
+        if anchor == "handle":
+            return self.d.geom(f"{base}/handle").xpos.copy()
+        if anchor in ("open", "closed"):  # where the handle is when the drawer is open / shut
+            out = self.d.qpos[self.s.drawer_qpos[base]]
+            # '.closed' aims 1.5 cm past shut: the hand lags the target, and the end stop holds the drawer.
+            want = min(DRAWER_PULL, o.size[0] * DRAWER_TRAVEL) if anchor == "open" else -0.015
+            return self.d.geom(f"{base}/handle").xpos + np.array([out - want, 0.0, 0.0])
+        if anchor == "slot":
+            out = self.d.qpos[self.s.drawer_qpos[base]]
+            cab = self.d.body(OBJ_PREFIX + base).xpos
+            front = cab[0] - o.size[0] / 2  # cabinet front face
+            floor = cab[2] - o.size[2] / 2 + 2 * BIN_WALL + 0.004
+            return np.array([front - out / 2 + 0.01, cab[1], floor])
+        if anchor:
+            raise IKError(f"'{name}': unknown anchor '{anchor}' (use .handle, .open, .closed or .slot)")
+        return self.d.body(OBJ_PREFIX + base).xpos.copy()
 
     # ---------- per-tick control ----------
     def apply(self) -> None:
@@ -106,16 +132,21 @@ class Controller:
         finger_axis = self.d.xmat[self.hand].reshape(3, 3)[:, 1]  # fingers slide along hand y
         best, best_d, reason = None, np.inf, ""
         for name, o in self.s.objects.items():
-            if o.fixed:
+            if o.fixed and o.shape != "drawer":
                 continue
-            b = self.d.body(OBJ_PREFIX + name)
-            R = b.xmat.reshape(3, 3)
-            local = R.T @ (tcp - b.xpos)  # tcp in object frame
-            half = np.array(o.size) / 2
+            if o.shape == "drawer":  # only the handle bar can be grasped
+                gid = self.m.geom(f"{name}/handle").id
+                pos, R = self.d.geom_xpos[gid], self.d.geom_xmat[gid].reshape(3, 3)
+                half = self.m.geom_size[gid]
+            else:
+                b = self.d.body(OBJ_PREFIX + name)
+                pos, R, half = b.xpos, b.xmat.reshape(3, 3), np.array(o.size) / 2
+            local = R.T @ (tcp - pos)  # tcp in object frame
             d = np.linalg.norm(np.maximum(np.abs(local) - half, 0))
             if d > GRASP_REACH or d >= best_d:
                 continue
-            width = _width_across(o, R, finger_axis)
+            width = (float(np.sum(np.abs(R.T @ finger_axis) * 2 * half)) if o.shape == "drawer"
+                     else _width_across(o, R, finger_axis))
             if width > MAX_GRASP_WIDTH:
                 reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; "
                           f"Panda gripper opens only {MAX_GRASP_WIDTH * 100:.1f} cm")
@@ -137,7 +168,7 @@ class Controller:
         eq = self.s.weld_ids[name]
         if on:
             # relpose = object pose in hand frame, so the weld holds it exactly where it is now.
-            obj = self.d.body(OBJ_PREFIX + name)
+            obj = self.d.body(self.s.grasp_body[name])
             hp, hR = self.d.xpos[self.hand], self.d.xmat[self.hand].reshape(3, 3)
             hq = self.d.xquat[self.hand]
             rel_p = hR.T @ (obj.xpos - hp)

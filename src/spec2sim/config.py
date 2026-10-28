@@ -38,3 +38,7 @@ DEV_SPEND_LIMIT_USD = float(os.getenv("DEV_SPEND_LIMIT_USD", "20"))
 # Public demo guard: Token Factory spend per UTC day. When reached, new runs are refused and the
 # UI points visitors to the recorded runs (which replay for free).
 DAILY_SPEND_LIMIT_USD = float(os.getenv("DAILY_SPEND_LIMIT_USD", "5"))
+
+# After a success, re-run the plan this many times under random perturbations (physics only,
+# no model calls) to report how robust it is. 0 disables.
+STRESS_TRIALS = int(os.getenv("STRESS_TRIALS", "16"))

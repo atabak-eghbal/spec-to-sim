@@ -19,6 +19,8 @@ Objects sit on the floor in front of it. Keep the scene minimal: only objects th
 things are put INTO (bin, basket, tray, box with an open top, bowl) are shape "bin"; describe
 them as TABLETOP size (e.g. "small desktop recycling bin", "shallow fruit basket"), never
 full-size floor bins: the arm must reach over them.
+A small cabinet with a sliding drawer is shape "drawer" (describe it as a tabletop drawer unit,
+e.g. "small desktop drawer organizer"); the robot can pull it open by its handle and push it shut.
 
 Object names: short snake_case like red_cube, soda_can, tennis_ball. Colors: plain names.
 approx_size_cm: your own estimate of the object's typical size (a toy block ~[3,3,3], a soda can
@@ -34,7 +36,12 @@ Goals are checked numerically at the end of the simulation:
 - upright: {"type":"upright", "obj":A}            A is not tipped over (for cans, bottles, cups)
 - left_of / right_of / in_front_of / behind: {"type":"left_of", "obj":A, "target":B}
           A ends on that side of B, from the robot's point of view (in front = farther from robot)
+- toppled: {"type":"toppled", "obj":A}            A ends knocked over or knocked down from where it started
+- opened / closed: {"type":"opened", "obj":D}     drawer D ends pulled open / pushed shut
+  "inside" also works with a drawer as target ("put the cube in the drawer").
 A task with several objects needs one goal per object (e.g. sorting 3 items = 3 "inside" goals).
+Goals describe only the FINAL state. "Open the drawer, put the cube in and close it" =
+inside(cube, drawer) + closed(drawer) (no "opened": the drawer ends shut).
 Use null for fields a goal type does not need. Write only the goals the task asks for: use
 "lifted" ONLY when the task ends with the object held in the air, never together with "on" or
 "at" for the same object.

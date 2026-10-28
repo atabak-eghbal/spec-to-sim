@@ -29,6 +29,9 @@ SUITE = [
     ("hard", "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin"),
     ("hard", "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray"),
     ("hard", "Put the soda can to the left of the Rubik's cube and keep it upright"),
+    ("beyond", "Open the drawer, put the Rubik's cube inside, and close it"),
+    ("beyond", "Put the tennis ball and the Rubik's cube into the drawer and close it"),
+    ("beyond", "Knock over the tower of three wooden toy blocks"),
 ]
 
 
@@ -83,7 +86,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--workers", type=int, default=2, help="parallel runs (rendering is CPU-bound)")
-    ap.add_argument("--only", choices=["easy", "medium", "hard"], default=None)
+    ap.add_argument("--only", choices=["easy", "medium", "hard", "beyond"], default=None)
     args = ap.parse_args()
 
     jobs = [(d, p, r) for r in range(args.reps) for d, p in SUITE if not args.only or d == args.only]

@@ -65,6 +65,11 @@ button.run:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent)
 .chip { border: 1px solid var(--rule); background: var(--sheet); border-radius: 99px; padding: 0.3rem 0.75rem; font-size: 0.85rem; cursor: pointer; }
 .chip:hover { border-color: var(--accent); }
 .chip.rec { border-style: dashed; }
+.gtabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.gtab { border: 0; background: none; padding: 0.45rem 0.9rem; font: 600 0.9rem/1 var(--display); font-stretch: 88%; color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.gtab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.gtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* main split */
 .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 1.4rem; align-items: start; }
@@ -155,6 +160,9 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .mixlegend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font: 400 0.75rem/1.3 var(--mono); color: var(--muted); }
 .mixlegend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -0.05rem; }
 .trace { font-size: 0.85rem; }
+.robust { height: 0.5rem; border-radius: 2px; background: var(--bad-soft); overflow: hidden; }
+.robust span { display: block; height: 100%; background: var(--ok); }
+.robust-line { font-size: 0.88rem; }
 .export { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
 .export-btn { border: 1.5px solid var(--ink); color: var(--ink); border-radius: 4px; padding: 0.4rem 0.8rem; text-decoration: none;
   font: 700 0.85rem/1 var(--display); font-stretch: 88%; white-space: nowrap; }
@@ -181,6 +189,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
       <textarea id="prompt" rows="2" placeholder="e.g. Put the Rubik's cube on top of the soda can" maxlength="300"></textarea>
       <button class="run" id="runbtn" type="submit">Simulate</button>
     </form>
+    <div class="gtabs" id="gtabs" role="tablist" aria-label="Example categories"></div>
     <div class="chips" id="examples"><span class="label">Try</span></div>
     <div class="chips" id="featured" hidden><span class="label">Recorded runs</span></div>
   </section>
@@ -200,6 +209,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
         <div class="modes" id="modes" hidden><button type="button" data-mode="3d">3D</button><button type="button" data-mode="video">Video</button></div></div>
       <div class="screen" id="screen"><div class="idle">Each attempt replays here in 3D. Drag to look around.</div></div>
       <div class="goals" id="goals"></div>
+      <div class="robust-line" id="robust" hidden></div>
       <div class="export" id="export" hidden>
         <a id="export-link" class="export-btn" href="#" download>Export scene</a>
         <span>MuJoCo scene, success checks and motion plan as a zip, ready to test your own robot policy.</span>
@@ -224,7 +234,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const badgeClass = (label) => "b-" + String(label || "code").replace(/\s+/g, "");
-const STEP_NAMES = { planner: "Planner", grounder: "Grounder", builder: "Builder", runner: "Simulator", critic: "Critic", repair: "Repair" };
+const STEP_NAMES = { planner: "Planner", grounder: "Grounder", builder: "Builder", runner: "Simulator", critic: "Critic", repair: "Repair", stress: "Stress test" };
 const STEP_MODEL = { planner: "Super", grounder: "Nano", builder: "Super", runner: null, critic: "Super VL" };
 
 let state, source, ticker;
@@ -263,6 +273,14 @@ function stepBody(s) {
   const d = s.data;
   if (!d) return "";
   switch (s.step) {
+    case "stress": {
+      if (!d.trials) return `<p>No valid perturbed variants could be generated for this scene.</p>`;
+      const pct = d.trials ? d.passed / d.trials : 0;
+      const pv = d.perturbation;
+      return `<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction. Physics only, no model calls (${d.seconds} s).</p>
+        <div class="robust"><span style="width:${(100 * pct).toFixed(0)}%"></span></div>
+        ${d.per_goal.length > 1 ? `<p class="mono" style="font-size:.78rem">${d.per_goal.map((p) => esc(`${p.goal.obj} ${p.goal.type} ${p.goal.target || ""}`.trim()) + `: ${p.passed}/${d.trials}`).join("<br>")}</p>` : ""}`;
+    }
     case "planner":
       return `<p>${esc(d.summary)}</p>
         <p class="mono" style="font-size:.78rem">objects: ${d.objects.map((o) => esc(o.name)).join(", ")}<br>goals: ${d.goals.map((g) => esc(g.type + "(" + [g.obj, g.target].filter(Boolean).join(", ") + (g.xyz ? ", " + g.xyz.join(", ") : "") + ")")).join("  ")}</p>`;
@@ -319,6 +337,7 @@ function renderScreen(r) {
     }
     screen.querySelector(".verdict")?.remove();
     screen.insertAdjacentHTML("beforeend", verdict);
+    if (pendingStyle) { viewer.setStyle(pendingStyle); pendingStyle = null; }
     viewer.load("/media/" + r.viz_path);
   } else if (mode === "video") {
     const src = "/media/" + r.video_path;
@@ -370,6 +389,7 @@ function runningText(s) {
     builder: "Placing objects and planning the motion…",
     runner: "Simulating in MuJoCo and checking the goals…",
     critic: "Watching the video to work out what went wrong…",
+    stress: "Re-running the plan under random perturbations…",
     repair: s.escalated ? "Escalated to Nemotron Ultra for a deeper repair…" : "Rewriting the plan using the critique…",
   }[s.step] || "Working…";
 }
@@ -382,6 +402,10 @@ function renderStage() {
   }).join("");
   const r = state.attempts[state.selected];
   renderScreen(r);
+  const st = state.steps.find((x) => x.step === "stress" && x.data);
+  const lastOk = Math.max(...Object.keys(state.attempts).map(Number).filter((n) => state.attempts[n].success), -1);
+  $("robust").hidden = !(st && state.selected === lastOk);
+  if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass and friction`;
   $("export").hidden = !(r && state.runId && !r.error);
   if (r && state.runId) $("export-link").href = `/api/runs/${encodeURIComponent(state.runId)}/export?attempt=${state.selected}`;
   $("goals").innerHTML = r ? r.goals.map((g) => `<div class="goal"><span class="pill ${g.ok ? "p-ok" : "p-bad"}">${g.ok ? "pass" : "fail"}</span><span>${esc(g.detail)}</span></div>`).join("") : "";
@@ -461,20 +485,38 @@ $("form").addEventListener("submit", async (e) => {
 });
 $("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });
 
+// Example gallery: one tab per category; each tab filters the prompts and recorded runs and sets
+// the 3D style (Basic shapes = plain primitives, the others = realistic objects).
+let pendingStyle = null, catStyle = {};
 fetch("/api/examples").then((r) => r.json()).then((ex) => {
+  const cats = ex.categories || [{ id: "all", label: "Examples", style: "realistic" }];
+  catStyle = Object.fromEntries(cats.map((c) => [c.id, c.style]));
+  const cat = (x) => x.category || cats[0].id;
   for (const p of ex.prompts || []) {
-    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = p;
-    b.onclick = () => { $("prompt").value = p; $("prompt").focus(); };
+    const text = typeof p === "string" ? p : p.text;
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = text;
+    b.dataset.cat = cat(p);
+    b.onclick = () => { $("prompt").value = text; $("prompt").focus(); };
     $("examples").appendChild(b);
   }
-  if ((ex.featured || []).length) {
-    $("featured").hidden = false;
-    for (const f of ex.featured) {
-      const b = document.createElement("button"); b.type = "button"; b.className = "chip rec"; b.textContent = "▶ " + f.title;
-      b.onclick = () => { $("prompt").value = f.prompt; follow(f.run_id); };
-      $("featured").appendChild(b);
-    }
+  for (const f of ex.featured || []) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip rec"; b.textContent = "▶ " + f.title;
+    b.dataset.cat = cat(f);
+    b.onclick = () => { $("prompt").value = f.prompt; pendingStyle = catStyle[cat(f)]; follow(f.run_id); };
+    $("featured").appendChild(b);
   }
+  const tabs = $("gtabs");
+  const pick = (id) => {
+    for (const t of tabs.children) t.setAttribute("aria-selected", String(t.dataset.cat === id));
+    for (const c of document.querySelectorAll("#examples .chip, #featured .chip")) c.hidden = c.dataset.cat !== id;
+    $("featured").hidden = !document.querySelector(`#featured .chip[data-cat="${id}"]`);
+  };
+  for (const c of cats) {
+    const t = document.createElement("button"); t.type = "button"; t.className = "gtab"; t.setAttribute("role", "tab");
+    t.textContent = c.label; t.dataset.cat = c.id; t.onclick = () => pick(c.id);
+    tabs.appendChild(t);
+  }
+  pick(cats[0].id);
 });
 
 const initial = new URL(location).searchParams.get("run");

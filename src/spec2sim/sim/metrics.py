@@ -12,7 +12,7 @@ import mujoco
 import numpy as np
 
 from spec2sim.schemas import Goal, GoalResult
-from spec2sim.sim.scene import BIN_WALL, OBJ_PREFIX, Scene
+from spec2sim.sim.scene import BIN_WALL, CLOSED_MAX, OBJ_PREFIX, OPENED_MIN, Scene
 
 ON_Z_TOL = 0.015  # resting-contact height tolerance, m
 AT_TOL = 0.03  # distance tolerance for 'at', m
@@ -22,6 +22,7 @@ UPRIGHT_MAX_TILT = 20.0  # degrees
 # (axis index, sign) in the robot frame: +x is away from the robot, +y is the robot's left.
 SIDES = {"left_of": (1, 1), "right_of": (1, -1), "in_front_of": (0, 1), "behind": (0, -1)}
 NEEDS_TARGET = {"on", "inside", *SIDES}
+TOPPLE_TILT = 45.0  # degrees, or the object dropped by half its height from where it started
 
 
 def _half_h(scene: Scene, name: str) -> float:
@@ -39,6 +40,39 @@ def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None) -> 
     if g.type in NEEDS_TARGET and g.target is None:
         return GoalResult(goal=g, ok=False, error_m=1.0, detail=f"'{g.type}' goal needs a target")
     held_note = "; still held by gripper" if held == g.obj else ""
+
+    if g.type in ("opened", "closed"):
+        if g.obj not in scene.drawer_qpos:
+            return GoalResult(goal=g, ok=False, error_m=1.0, detail=f"{g.obj} is not a drawer")
+        out = max(0.0, float(data.qpos[scene.drawer_qpos[g.obj]]))
+        if g.type == "opened":
+            return GoalResult(goal=g, ok=out >= OPENED_MIN, error_m=max(0.0, OPENED_MIN - out),
+                              detail=f"{g.obj} is {out * 100:.1f} cm open (need >= {OPENED_MIN * 100:.0f})")
+        return GoalResult(goal=g, ok=out <= CLOSED_MAX and held != g.obj, error_m=max(0.0, out - CLOSED_MAX),
+                          detail=f"{g.obj} is {out * 100:.1f} cm open (closed means <= {CLOSED_MAX * 100:.1f}){held_note}")
+
+    if g.type == "toppled":
+        o = scene.objects[g.obj]
+        up = data.body(OBJ_PREFIX + g.obj).xmat.reshape(3, 3)[:, 2]
+        tilt = float(np.degrees(np.arccos(np.clip(up[2], -1, 1))))
+        drop = o.pos[2] - float(p[2])
+        tipped = o.shape != "sphere" and tilt >= TOPPLE_TILT
+        ok = tipped or drop >= o.size[2] / 2
+        return GoalResult(goal=g, ok=ok, error_m=0.0 if ok else o.size[2] / 2 - drop,
+                          detail=f"{g.obj} tilted {tilt:.0f} deg and dropped {drop * 100:.1f} cm from its start "
+                                 f"(toppled = tilt >= {TOPPLE_TILT:.0f} deg or drop >= {o.size[2] / 2 * 100:.1f} cm)")
+
+    if g.type == "inside" and scene.objects[g.target].shape == "drawer":
+        t = scene.objects[g.target]
+        b = data.body(f"{OBJ_PREFIX}{g.target}/drawer")
+        local = b.xmat.reshape(3, 3).T @ (p - b.xpos)
+        inner = np.array(t.size[:2]) / 2 - 2 * BIN_WALL
+        out_xy = np.maximum(np.abs(local[:2]) - inner, 0)
+        ok_z = -t.size[2] / 2 + BIN_WALL <= local[2] <= t.size[2] / 2
+        err = float(np.linalg.norm(out_xy)) + (0.0 if ok_z else 0.05)
+        ok = bool(err == 0 and ok_z) and held != g.obj
+        where = "inside" if err == 0 and ok_z else f"outside (off by {err * 100:.1f} cm)"
+        return GoalResult(goal=g, ok=ok, error_m=err, detail=f"{g.obj} centroid is {where} {g.target}'s drawer{held_note}")
 
     if g.type == "inside":
         t = scene.objects[g.target]

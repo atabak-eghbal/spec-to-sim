@@ -1,9 +1,11 @@
 # Batch evaluation
 
-`scripts/eval.py` runs a fixed suite of 8 prompts (easy → hard) through the full pipeline and
+`scripts/eval.py` runs a fixed suite of 11 prompts through the full pipeline and
 reports success, first-try success, attempts, LLM cost and wall time. Success is decided only by
 the code-checked goal predicates (`src/spec2sim/sim/metrics.py`), never by a model. The same
-script is the entrypoint of the Nebius Serverless Job (`deploy/nebius/README.md`).
+script is the entrypoint of the Nebius Serverless Job (`deploy/nebius/README.md`). The 11 prompts are
+8 pick-and-place style tasks (easy to hard) and 3 "beyond pick-and-place" tasks (two drawer
+open/insert/close tasks and a knock-over).
 
 ```bash
 uv run python scripts/eval.py --reps 3 --workers 2
@@ -18,6 +20,8 @@ Each eval round exposed failures that were then fixed in code, not by tuning pro
 | 1 (before harder-task guards) | 4/8 | 3/8 | $0.20 | Planner put a goal inside the robot base; IK failed inside the stated workspace; the new gripper-width check caught web sizes that were wrong (a 44 cm "toy block", a soda can with its dimensions scrambled) |
 | 2 (hard prompts only) | 2/3 | 2/3 | $0.06 | One scene error found per attempt (bin over the edge, then bin too small, then an invented table) |
 | 3 (all fixes) | **8/8** | 3/8 | **$0.17** | First-try misses: invented "table" object (2×), a 10 cm bin for three blocks, the tennis ball rolling off (real physics) |
+| 4 (new: drawers, knock-over; 3 prompts) | 2/3 | 1/3 | $0.09 | Builder ignored the cabinet placement rule; a repair copied the prompt's placeholder name `D.handle`; a second object was dropped on top of the first in the drawer |
+| 5 (same 3, after fixes) | **3/3** | **3/3** | **$0.02** | Drawer placement moved into code (like bin sizing); real names in the prompt; side-by-side slot offsets |
 
 ## Round 3 detail
 

@@ -27,16 +27,21 @@ def _smoothstep(x: float) -> float:
 
 
 class _Sim:
-    def __init__(self, build: Build, out_dir: Path, allowed: set[str] | None = None):
+    def __init__(self, build: Build, out_dir: Path | None, allowed: set[str] | None = None,
+                 tweak=None):
+        """out_dir=None: physics only, nothing rendered or recorded (used by the stress test).
+        tweak(model): optional hook to perturb the compiled model (e.g. friction)."""
         self.scene = build_scene(build.objects, allowed)
         self.m = self.scene.model
         self.d = mujoco.MjData(self.m)
         self.d.qpos[self.scene.arm_qpos] = HOME_Q
         self.d.qpos[self.m.joint("finger_joint1").qposadr[0]] = 0.04
         self.d.qpos[self.m.joint("finger_joint2").qposadr[0]] = 0.04
+        if tweak:
+            tweak(self.m)
         mujoco.mj_forward(self.m, self.d)
         self.ctl = Controller(self.scene, self.d)
-        self.rec = Recorder(self.m, out_dir)
+        self.rec = Recorder(self.m, out_dir) if out_dir is not None else None
         self.events: list[str] = []
         self.n_sub = round(CTRL_DT / self.m.opt.timestep)
         self.next_frame = 0.0
@@ -44,7 +49,7 @@ class _Sim:
     def tick(self) -> None:
         self.ctl.apply()
         mujoco.mj_step(self.m, self.d, nstep=self.n_sub)
-        if self.d.time >= self.next_frame:
+        if self.rec and self.d.time >= self.next_frame:
             self.rec.capture(self.d)
             self.next_frame += 1.0 / FPS
         if self.d.time > MAX_SIM_TIME:
@@ -64,7 +69,10 @@ class _Sim:
         elif a.op in ("open", "close"):
             if a.op == "open":
                 released = ctl.release()
-                if released:
+                if released and self.scene.objects[released].shape == "drawer":
+                    out = max(0.0, self.d.qpos[self.scene.drawer_qpos[released]])
+                    self.event(f"released {released} handle: drawer is {out * 100:.1f} cm open")
+                elif released:
                     self.event(f"released {released}: {self._support_gap(released)}")
             start, end = ctl.grip, GRIP_OPEN if a.op == "open" else GRIP_CLOSED
             steps = max(1, round(a.duration / CTRL_DT))
@@ -72,7 +80,9 @@ class _Sim:
                 ctl.grip = start + (end - start) * _smoothstep((k + 1) / steps)
                 self.tick()
             if a.op == "close":
-                _, msg = ctl.try_grasp()
+                got, msg = ctl.try_grasp()
+                if got and self.scene.objects[got].shape == "drawer":
+                    msg = f"grasped {got} handle"
                 self.event(msg)
         else:  # move_to
             if a.object is not None:
@@ -110,6 +120,12 @@ class _Sim:
             c = self.d.body(OBJ_PREFIX + other).xpos
             # A bin's support surface is its floor, not its rim.
             surface = c[2] - q.size[2] / 2 + BIN_WALL if q.shape == "bin" else c[2] + q.size[2] / 2
+            if q.shape == "drawer":  # the drawer's own floor, wherever it has slid to
+                db = self.d.body(f"{OBJ_PREFIX}{other}/drawer").xpos
+                surface = c[2] - q.size[2] / 2 + 2 * BIN_WALL
+                if np.all(np.abs(p[:2] - db[:2]) < np.array(q.size[:2]) / 2) and surface <= bottom + 0.02 and surface > top:
+                    below, top = f"{other}'s drawer floor", surface
+                continue
             if np.all(np.abs(p[:2] - c[:2]) < np.array(q.size[:2]) / 2) and surface <= bottom + 0.02:
                 t = surface
                 if t > top:
@@ -154,7 +170,8 @@ def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None
             g = cheats[0]
             error = (f"{g.obj} already starts {g.type} {g.target}; objects must start away from "
                      "their goal so the robot does the task")
-            sim.rec.close()
+            if sim.rec:
+                sim.rec.close()
             return RunResult(success=False, goals=[], events=[], error=error)
         for i, a in enumerate(build.plan.actions):
             try:
@@ -177,3 +194,73 @@ def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None
         video_path=video, frame_paths=frames, contact_sheet_path=sheet, viz_path=viz,
         duration_s=round(time.time() - t0, 2),
     )
+
+
+# ---------- stress test ----------
+def _execute(sim: _Sim, build: Build) -> str | None:
+    """Run the plan in an existing sim. Returns an error string or None."""
+    try:
+        sim.hold(SETTLE_START)
+        for i, a in enumerate(build.plan.actions):
+            try:
+                sim.do(a)
+            except IKError as e:
+                return f"action {i + 1} ({a.op}): {e}"
+        sim.hold(SETTLE_END)
+    except IKError as e:
+        return str(e)
+    return None
+
+
+def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0,
+                pos_jitter: float = 0.015, yaw_jitter: float = 0.15, mass_scale: float = 0.2,
+                friction_scale: float = 0.3) -> dict:
+    """Re-run a plan under random perturbations, physics only (no rendering, no model calls).
+
+    Like Isaac Lab-Arena's sensitivity analysis: does the plan still work if each object starts up
+    to 1.5 cm away and turned up to ~9 degrees, weighs +-20 %, and has +-30 % friction? Plan steps
+    are relative to objects' *current* positions, so a good plan adapts to the jitter.
+    """
+    rng = np.random.default_rng(seed)
+    rows, goal_pass = [], {i: 0 for i in range(len(goals))}
+    t0 = time.time()
+    attempts = 0
+    while len(rows) < trials and attempts < trials * 3:
+        attempts += 1
+        objs, change = [], {}
+        for o in build.objects:
+            if o.fixed or o.shape in ("bin", "drawer"):  # furniture stays put
+                objs.append(o)
+                continue
+            dx, dy = rng.uniform(-pos_jitter, pos_jitter, 2)
+            dyaw = rng.uniform(-yaw_jitter, yaw_jitter) if o.shape != "sphere" else 0.0
+            k = rng.uniform(1 - mass_scale, 1 + mass_scale)
+            objs.append(o.model_copy(update={"pos": (o.pos[0] + dx, o.pos[1] + dy, o.pos[2]),
+                                             "yaw": o.yaw + dyaw, "mass": o.mass * k}))
+            change[o.name] = {"dx_cm": round(dx * 100, 1), "dy_cm": round(dy * 100, 1),
+                              "yaw_deg": round(float(np.degrees(dyaw)), 1), "mass_x": round(k, 2)}
+        fk = rng.uniform(1 - friction_scale, 1 + friction_scale)
+
+        def tweak(m, fk=fk):
+            for g in range(m.ngeom):
+                if m.body(m.geom_bodyid[g]).name.startswith(OBJ_PREFIX):
+                    m.geom_friction[g, 0] *= fk
+
+        b = build.model_copy(update={"objects": objs})
+        try:
+            sim = _Sim(b, None, tweak=tweak)
+        except SceneError:
+            continue  # jitter made two objects overlap: draw again
+        err = _execute(sim, b)
+        res = [check_goal(sim.scene, sim.d, g, sim.ctl.held) for g in goals]
+        ok = err is None and all(r.ok for r in res)
+        for i, r in enumerate(res):
+            goal_pass[i] += r.ok
+        rows.append({"ok": ok, "error": err, "friction_x": round(fk, 2), "objects": change,
+                     "failed": [r.detail for r in res if not r.ok]})
+    n = len(rows)
+    return {"trials": n, "passed": sum(r["ok"] for r in rows),
+            "per_goal": [{"goal": g.model_dump(exclude_none=True), "passed": goal_pass[i]} for i, g in enumerate(goals)],
+            "perturbation": {"position_cm": pos_jitter * 100, "yaw_deg": round(float(np.degrees(yaw_jitter)), 1),
+                             "mass_pct": mass_scale * 100, "friction_pct": friction_scale * 100},
+            "rows": rows, "seconds": round(time.time() - t0, 1)}

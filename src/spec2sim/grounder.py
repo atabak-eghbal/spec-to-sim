@@ -35,7 +35,7 @@ For EACH object listed, fill in, in this order:
   or "" if the results do not mention this object's numbers
 - source_url: the URL of the result that quote came from, or null
 - size_mm: full size in MILLIMETERS as [x, y, z]; for a cylinder or sphere [diameter, diameter, height];
-  for a bin (open container) its outer [length, width, height]
+  for a bin (open container) or a drawer unit its outer [depth, width, height]
 - mass_g: mass in GRAMS
 - note: under 12 words, e.g. "from quote" or "estimate: typical wooden block"
 Only use a quote about the SAME kind of thing: a result about an Apple iPhone or AirPods is not
@@ -91,7 +91,7 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
             e = e.model_copy(update={"quote": "", "note": f"web size {web_cm} cm rejected (expected ~{list(prior_cm)} cm)"})
     vol = _volume(size, shape)
     note = e.note
-    if shape == "bin":  # hollow and fixed in place: mass does not matter, volume is mostly air
+    if shape in ("bin", "drawer"):  # hollow and fixed in place: mass does not matter, volume is mostly air
         # Real storage bins are floor-sized. Shrink the footprint to fit the workspace (keeping its
         # proportions) and cap the walls at a height the arm can reach over.
         k = min(1.0, BIN_MAX_SIZE / max(size[:2]))
@@ -111,6 +111,23 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
         note = f"{note}; {fix}" if note.startswith("web size") else fix
     return ObjectFact(name=e.name, size=size, mass=mass,
                       source_url=e.source_url if e.quote.strip() else None, note=note)
+
+
+def _fit_drawers(task: TaskSpec, facts: GroundedFacts) -> None:
+    """A drawer must be tall enough for what goes in it (with room to slide shut) and big enough
+    to reach into; real drawer units vary from flat organizers to furniture."""
+    by = {f.name: f for f in facts.facts}
+    for o in task.objects:
+        f = by.get(o.name)
+        if o.shape != "drawer" or f is None:
+            continue
+        contents = [by[g.obj].size[2] for g in task.goals if g.type == "inside" and g.target == o.name and g.obj in by]
+        need_h = max([0.08] + [h + 0.045 for h in contents])
+        sx, sy, sz = f.size
+        new = (min(max(sx, 0.18), 0.24), min(max(sy, 0.18), BIN_MAX_SIZE), min(max(sz, need_h), 0.15))
+        if new != tuple(f.size):
+            f.size = new
+            f.note = (f.note + "; " if f.note else "") + "sized to fit its contents (tabletop drawer unit)"
 
 
 @traceable(name="tavily_search", run_type="retriever")
@@ -153,6 +170,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     shapes = {o.name: o.shape for o in task.objects}
     priors = {o.name: o.approx_size_cm for o in task.objects}
     facts = GroundedFacts(facts=[_to_fact(e, shapes.get(e.name, "box"), priors.get(e.name)) for e in ex.facts])
+    _fit_drawers(task, facts)
     # Keep the sources list short and unique for the UI.
     seen, uniq = set(), []
     for s in sources:
