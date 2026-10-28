@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    "Put the Rubik's cube on top of the soda can",
+    "Pick up the tennis ball and place it on the Rubik's cube",
+    "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
+    "A Franka arm stacks the red cube on the blue cube"
+  ],
+  "featured": [
+    {"title": "Tennis ball rolls off, then repaired", "prompt": "Pick up the tennis ball and place it on the Rubik's cube", "run_id": "20261028-093443-14f0"},
+    {"title": "Cube placed on the floor, then repaired", "prompt": "A Franka arm stacks the red cube on the blue cube", "run_id": "20261028-093211-b9fb"},
+    {"title": "Rubik's cube on a soda can", "prompt": "Put the Rubik's cube on top of the soda can", "run_id": "20261028-093211-cf29"},
+    {"title": "Three-block tower", "prompt": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top", "run_id": "20261028-093304-b86e"}
+  ]
+}

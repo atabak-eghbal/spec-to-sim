@@ -95,8 +95,8 @@ class _Sim:
                 self.tick()
             ctl.yaw = a.yaw
             err = np.linalg.norm(ctl.tcp_pos() - target)
-            if err > 0.02:
-                self.event(f"arm lagging: tcp {err * 100:.1f} cm from move_to target (contact or collision?)")
+            if err > 0.035:
+                self.event(f"arm blocked: tcp stopped {err * 100:.1f} cm short of the move_to target (collision?)")
 
     def _support_gap(self, name: str) -> str:
         """Describe how far the released object's bottom is above whatever is below it."""

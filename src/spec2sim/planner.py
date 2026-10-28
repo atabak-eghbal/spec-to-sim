@@ -23,7 +23,9 @@ Goals are checked numerically at the end of the simulation:
 - on:     {"type":"on", "obj":A, "target":B}      A rests on top of B
 - at:     {"type":"at", "obj":A, "xyz":[x,y,z]}   A's center ends near a world point (floor z = half height)
 - lifted: {"type":"lifted", "obj":A}              A is held at least 5 cm above the floor at the end
-Use null for fields a goal type does not need.
+Use null for fields a goal type does not need. Write only the goals the task asks for: use
+"lifted" ONLY when the task ends with the object held in the air, never together with "on" or
+"at" for the same object.
 
 search_queries: 1-3 web searches that would return the REAL dimensions and mass of the objects.
 Name a concrete real product with published specs, e.g. "12 oz soda can dimensions mm weight",

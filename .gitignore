@@ -12,5 +12,6 @@ runs/
 third_party/
 *.mp4
 !assets/*.mp4
+!app/featured/**/*.mp4
 .DS_Store
 MUJOCO_LOG.TXT

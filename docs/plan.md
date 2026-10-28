@@ -20,9 +20,9 @@ Deadline: **Fri Oct 30, 10:00 AM PT**. Target submit: **08:00 AM PT**.
 - [x] Loop with escalation to Ultra; LangSmith tracing on every call (Ultra path not yet exercised live)
 
 ## Wed Oct 28 (afternoon/evening) — Product  ⏱ ~5h
-- [ ] FastAPI backend + Server-Sent Events streaming each step
-- [ ] Single-page UI: prompt box, live step timeline with model badges (Nano/Super/Ultra/VL), cost/tokens, per-iteration video, Tavily sources, LangSmith trace link
-- [ ] 4–5 curated example prompts that reliably succeed (one that needs a repair loop!)
+- [x] FastAPI backend + Server-Sent Events streaming each step (events persisted, replayable)
+- [x] Single-page UI: prompt box, live step timeline with model badges (Nano/Super/Ultra/VL), cost/tokens, per-iteration video, Tavily sources, LangSmith trace link
+- [x] 4 curated example prompts + 4 recorded featured runs (2 with a natural repair) in `app/featured/`
 
 ## Wed Oct 28 (night) — Nebius deployment  ⏱ ~3h
 - [ ] Dockerfile (osmesa/egl), push image

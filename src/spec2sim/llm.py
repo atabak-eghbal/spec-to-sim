@@ -108,7 +108,11 @@ def chat_json(
 
         text = r.choices[0].message.content or ""
         if not text.strip() and r.choices[0].finish_reason == "length":
-            raise LLMError(f"{step}: {model.label} used all {max_tokens} tokens reasoning, no answer")
+            # Reasoning ate the whole budget. Retry once with reasoning off rather than fail the run.
+            if attempt == 1 or not thinking:
+                raise LLMError(f"{step}: {model.label} used all {max_tokens} tokens reasoning, no answer")
+            thinking = False
+            continue
         try:
             return out.model_validate_json(text), stats
         except ValidationError as e:

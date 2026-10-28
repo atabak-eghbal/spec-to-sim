@@ -21,8 +21,8 @@ class Recorder:
     def __init__(self, model: mujoco.MjModel):
         self.r = mujoco.Renderer(model, height=RENDER_H, width=RENDER_W)
         self.cam = mujoco.MjvCamera()
-        self.cam.lookat[:] = (0.4, 0.0, 0.3)
-        self.cam.distance, self.cam.azimuth, self.cam.elevation = 1.7, 150, -20
+        self.cam.lookat[:] = (0.38, 0.0, 0.3)
+        self.cam.distance, self.cam.azimuth, self.cam.elevation = 1.5, 145, -17
         self.frames: list[np.ndarray] = []
         self.times: list[float] = []
 

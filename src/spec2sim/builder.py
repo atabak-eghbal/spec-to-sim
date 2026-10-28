@@ -57,7 +57,7 @@ def _context(task: TaskSpec, facts: GroundedFacts) -> str:
 
 @traceable(name="builder")
 def build(task: TaskSpec, facts: GroundedFacts) -> tuple[Build, list[CallStat]]:
-    return chat_json("builder", config.SUPER, SYSTEM, _context(task, facts), Build)
+    return chat_json("builder", config.SUPER, SYSTEM, _context(task, facts), Build, max_tokens=16000)
 
 
 REPAIR_ADDENDUM = """
@@ -77,4 +77,4 @@ def repair(task: TaskSpec, facts: GroundedFacts, prev: Build, result: RunResult,
             + "\n".join(f"- {'PASS' if g.ok else 'FAIL'}: {g.detail}" for g in result.goals)
             + "\nSIM EVENTS:\n" + "\n".join(f"- {e}" for e in result.events)
             + f"\n\nCRITIC DIAGNOSIS:\n{critique.model_dump_json()}")
-    return chat_json(f"repair#{attempt}", model, SYSTEM + REPAIR_ADDENDUM, user, Build)
+    return chat_json(f"repair#{attempt}", model, SYSTEM + REPAIR_ADDENDUM, user, Build, max_tokens=16000)
