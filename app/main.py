@@ -30,7 +30,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from spec2sim.llm import BudgetError, check_budget
 from spec2sim.loop import RUNS, _public, run_task
-from spec2sim.schemas import Build, Goal
+from spec2sim.provenance import provenance
+from spec2sim.schemas import Build, Goal, GroundedFacts
 from spec2sim.sim import runner
 from spec2sim.sim.scene import build_scene, objects_mjcf
 from spec2sim.sim.webviz import export_meshes
@@ -174,6 +175,12 @@ def meshes_bin() -> Response:
                     headers={"Content-Encoding": "gzip", "Cache-Control": "public, max-age=86400"})
 
 
+def _facts(events: list[dict]) -> GroundedFacts:
+    """The run's grounded facts (sizes, materials, robot limits); empty for very old runs."""
+    g = [e for e in events if e.get("step") == "grounder" and e.get("status") == "done"]
+    return GroundedFacts(**g[0]["data"]) if g else GroundedFacts(facts=[])
+
+
 ROBOLAB = {"on": "object_on_top", "inside": "object_in_container", "left_of": "object_left_of",
            "right_of": "object_right_of", "in_front_of": "object_in_front_of", "behind": "object_behind",
            "upright": "object_upright (no RoboLab equivalent)", "at": "object_at_position", "lifted": "object_lifted"}
@@ -235,12 +242,13 @@ def export(run_id: str, attempt: int | None = None) -> Response:
                      "fixed": o.fixed or o.shape == "bin", "source_url": facts.get(o.name, {}).get("source_url"),
                      "note": facts.get(o.name, {}).get("note")} for o in b.objects],
         "goals": [{**g, "robolab": ROBOLAB.get(g["type"])} for g in task["goals"]],
+        "real_world_facts": provenance(_facts(events)),
         "result": {"success": res["success"], "goals": [{"ok": g["ok"], "detail": g["detail"]} for g in res["goals"]]}
         if res else None,
     }
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("scene_objects.xml", objects_mjcf(b.objects))
+        z.writestr("scene_objects.xml", objects_mjcf(b.objects, _facts(events).physics()))
         z.writestr("task.json", json.dumps(task_json, indent=2))
         z.writestr("plan.json", json.dumps(b.plan.model_dump(), indent=2))
         z.writestr("README.md", EXPORT_README.format(
@@ -281,7 +289,7 @@ def try_it(run_id: str, req: TryRequest) -> dict:
     goals = [Goal(**g) for g in task["goals"]]
     with _try_lock:  # one at a time: it's CPU work on the web server
         n = len(list((RUNS / run_id).glob("try*"))) + 1
-        r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects})
+        r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects}, _facts(events).physics())
     return {"try": n, "attempt": req.attempt, "result": _public(r, run_id)}
 
 
@@ -319,8 +327,10 @@ def make_dataset(run_id: str, req: DatasetRequest) -> dict:
         try:
             with _try_lock:
                 out = RUNS / run_id / f"dataset_{req.episodes}"
+                facts = _facts(events)
                 res = generate(Build(**builds[ok[-1]]), [Goal(**g) for g in task["goals"]], prompt, out,
-                               episodes=req.episodes, progress=progress)
+                               episodes=req.episodes, progress=progress, physics=facts.physics(),
+                               provenance=provenance(facts))
             res["zip"] = str(Path(res["zip"]).relative_to(RUNS))
             job.update(state="done", result=res, done=res["episodes"])
         except Exception as e:  # noqa: BLE001 - report any failure to the UI

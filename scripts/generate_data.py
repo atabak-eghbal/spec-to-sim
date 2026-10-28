@@ -16,7 +16,8 @@ import time
 from pathlib import Path
 
 from spec2sim.loop import RUNS, run_task
-from spec2sim.schemas import Build, Goal
+from spec2sim.provenance import provenance
+from spec2sim.schemas import Build, Goal, GroundedFacts
 from spec2sim.sim.dataset import generate
 
 
@@ -28,7 +29,9 @@ def from_events(events: list[dict]):
     builds = {e["attempt"]: e["data"] for e in done("builder") + done("repair")}
     task = done("planner")[0]["data"]
     prompt = next((e.get("prompt") for e in events if e["type"] == "start"), task["summary"])
-    return Build(**builds[ok[-1]]), [Goal(**g) for g in task["goals"]], prompt
+    g = done("grounder")
+    facts = GroundedFacts(**g[0]["data"]) if g else GroundedFacts(facts=[])
+    return Build(**builds[ok[-1]]), [Goal(**g) for g in task["goals"]], prompt, facts
 
 
 def main() -> None:
@@ -55,8 +58,9 @@ def main() -> None:
             print(f"SKIP {src[:60]!r}: task not solved", flush=True)
             summary.append({"source": src, "run_id": run_id, "solved": False})
             continue
-        build, goals, prompt = got
-        res = generate(build, goals, prompt, out / run_id, episodes=args.episodes, images=not args.no_images)
+        build, goals, prompt, facts = got
+        res = generate(build, goals, prompt, out / run_id, episodes=args.episodes, images=not args.no_images,
+                       physics=facts.physics(), provenance=provenance(facts))
         res.update(source=src, run_id=run_id, solved=True, total_seconds=round(time.time() - t0, 1))
         summary.append(res)
         print(f"OK   {prompt[:60]!r}: {res['episodes']} episodes / {res['tried']} tries, {res['frames']} frames "

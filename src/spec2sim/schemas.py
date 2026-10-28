@@ -29,6 +29,9 @@ class ObjectSpec(BaseModel):
         description="bin = open-top container (tray, basket, storage bin) other objects go into; "
                     "drawer = small cabinet with one sliding drawer that has a handle")
     color: str = Field(description="plain color name, e.g. red")
+    material: Literal["rubber", "wood", "plastic", "metal", "glass", "ceramic", "cardboard", "paper",
+                      "fabric", "foam", "fruit"] = Field(
+        "plastic", description="what its surface is mostly made of (sets friction and bounciness from the web)")
     approx_size_cm: Vec3 = Field(description="your own rough guess of its typical real size in cm "
                                              "(x, y, z); cylinder/sphere: (d, d, h). Used to sanity-check web data")
 
@@ -101,10 +104,47 @@ class ObjectFact(BaseModel):
     mass: float = Field(description="kg")
     source_url: str | None = Field(None, description="URL the numbers came from, if any")
     note: str = Field("", description="short justification, e.g. 'standard block is 5 cm'")
+    material: str | None = None
+    image_url: str | None = Field(None, description="product image from the search results")
+    sources_checked: int = Field(0, description="independent web sources that gave a size")
+    sources_agree: int = Field(0, description="of those, how many agree with the chosen size (within 20%)")
+
+
+class MaterialFact(BaseModel):
+    """Contact physics for one material, from the web (cached and shared across runs).
+    A value counts as sourced only if its quote was found verbatim in the fetched text."""
+    material: str
+    friction: float = Field(description="sliding friction coefficient against a table")
+    restitution: float = Field(description="coefficient of restitution, 0 (dead) to 1 (perfect bounce)")
+    friction_source: str | None = None
+    friction_quote: str = ""
+    restitution_source: str | None = None
+    restitution_quote: str = ""
+    note: str = ""
+
+
+class RobotFact(BaseModel):
+    """Franka Panda limits from its spec sheet (cached); quotes verified against the fetched text."""
+    gripper_opening_mm: float
+    payload_kg: float
+    reach_mm: float
+    gripper_source: str | None = None
+    gripper_quote: str = ""
+    arm_source: str | None = None
+    arm_quote: str = ""
+    note: str = ""
 
 
 class GroundedFacts(BaseModel):
     facts: list[ObjectFact]
+    materials: list[MaterialFact] = []
+    robot: RobotFact | None = None
+
+    def physics(self) -> dict[str, tuple[float, float]]:
+        """object name -> (friction, restitution), for the simulator."""
+        by_mat = {m.material: m for m in self.materials}
+        return {f.name: (by_mat[f.material].friction, by_mat[f.material].restitution)
+                for f in self.facts if f.material in by_mat}
 
 
 class Source(BaseModel):

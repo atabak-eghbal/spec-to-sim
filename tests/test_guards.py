@@ -104,3 +104,32 @@ def test_daily_budget_cap(tmp_path, monkeypatch):
         f.write(json.dumps({"cost_usd": 0.5, "ts": time.time()}) + "\n")
     with pytest.raises(llm.BudgetError, match="today's model budget"):
         llm.check_budget()
+
+
+def test_quote_verification_rejects_invented_citations():
+    from spec2sim.grounder import _norm, verified
+    page = _norm("Technical data: the Franka Hand has a maximum opening stroke of 80 mm and 70 N continuous force.")
+    assert verified("a maximum opening stroke of 80 mm", page)
+    assert not verified("Maximum gripper opening (stroke) in mm: 100 mm", page)  # what Nano once invented
+    assert not verified("stroke of 100 mm", page)  # right words, wrong number
+
+
+def test_web_restitution_is_calibrated_in_the_simulator():
+    import mujoco
+    import numpy as np
+
+    from spec2sim.sim.scene import OBJ_PREFIX, build_scene
+    ball = SceneObject(name="ball", shape="sphere", size=(0.066,) * 3, mass=0.058, rgba=(1, 1, 0, 1), pos=(0.5, 0.0, 0.4))
+    for e_web in (0.6, 0.3):
+        sc = build_scene([ball], physics={"ball": (0.9, e_web)})
+        m, d = sc.model, mujoco.MjData(sc.model)
+        d.qpos[sc.arm_qpos] = [0, -0.8, 0, -2.5, 0, 1.7, 0.8]
+        mujoco.mj_forward(m, d)
+        z = []
+        for _ in range(1200):
+            mujoco.mj_step(m, d)
+            z.append(d.body(OBJ_PREFIX + "ball").xpos[2])
+        z = np.array(z)
+        first = int(np.argmax(z < 0.035))
+        e_sim = np.sqrt((z[first:first + 500].max() - 0.033) / 0.367)
+        assert abs(e_sim - e_web) < 0.06, (e_web, e_sim)

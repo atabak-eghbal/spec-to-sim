@@ -83,7 +83,10 @@ def _stats(x: np.ndarray) -> dict:
 
 
 def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episodes: int = 20,
-             seed: int = 1, images: bool = True, progress=None) -> dict:
+             seed: int = 1, images: bool = True, progress=None, physics: dict | None = None,
+             provenance: dict | None = None) -> dict:
+    """provenance: the real-world facts behind the scene (sizes, materials, robot limits, with
+    their source URLs); saved in meta/info.json so the data stays traceable."""
     """Run up to 3x `episodes` perturbed variants; save the first `episodes` successes."""
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
@@ -93,7 +96,7 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
         tried += 1
         b, tweak, _ = perturb(build, rng)
         try:
-            sim = _Sim(b, None, tweak=tweak)
+            sim = _Sim(b, None, tweak=tweak, physics=physics)
         except SceneError:
             continue
         col = _Collector(sim, images)
@@ -165,7 +168,9 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
             "chunks_size": 1000, "fps": FPS, "splits": {"train": f"0:{len(kept)}"},
             "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
             "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4" if images else None,
-            "features": features}
+            "features": features,
+            "spec2sim": {"task": prompt, "facts": provenance or {},
+                         "generator": "Spec-to-Sim: re-runs of a verified plan with randomized starts, masses and friction; successes only"}}
     (root / "meta/info.json").write_text(json.dumps(info, indent=2))
     (root / "meta/tasks.jsonl").write_text(json.dumps({"task_index": 0, "task": prompt}) + "\n")
     (root / "meta/episodes.jsonl").write_text("".join(json.dumps(x) + "\n" for x in ep_lines))

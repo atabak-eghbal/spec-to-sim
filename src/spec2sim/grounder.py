@@ -1,16 +1,21 @@
-"""Step 2 - Grounder (Tavily + Nemotron Nano): real-world sizes and masses, with sources.
+"""Step 2 - Grounder (Tavily + Nemotron Nano): real-world facts that change the simulation.
 
-Runs the Planner's search queries on Tavily (cached on disk by query hash to protect credits,
-max 3 per run), then Nemotron Nano extracts one size + mass per object, citing the source URL.
-Nano copies numbers in the units the web uses (mm, g) plus the quote they came from; our code
-converts to SI and sanity-checks mass against volume. If the web gives nothing usable, Nano falls
-back to a stated estimate (source_url = null).
+1. Object facts: the Planner's searches (max 3, cached on disk) return snippets, a Tavily answer
+   and product images. Nano extracts each object's size and mass with the quote it came from,
+   plus up to 3 independent pieces of evidence, so code can count how many sources agree.
+   Code converts units, rejects sizes far from the Planner's own estimate, checks density.
+2. Material physics: friction and bounciness (coefficient of restitution) per material, searched
+   once and cached for every later run, then applied to MuJoCo's contact settings.
+3. Robot limits: the Franka's gripper opening, payload and reach from its spec sheet (cached),
+   so "physically infeasible" cites a source on both sides.
+Every number keeps its source URL; values outside physical bounds fall back to labelled estimates.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import math
+import re
 import time
 from pathlib import Path
 
@@ -20,7 +25,7 @@ from tavily import TavilyClient
 
 from spec2sim import config
 from spec2sim.llm import CallStat, chat_json
-from spec2sim.schemas import GroundedFacts, ObjectFact, Source, TaskSpec
+from spec2sim.schemas import GroundedFacts, MaterialFact, ObjectFact, RobotFact, Source, TaskSpec
 from spec2sim.sim.scene import BIN_MAX_SIZE
 
 BIN_TARGET_HEIGHT = 0.12  # walls low enough for the arm to reach over comfortably
@@ -38,6 +43,10 @@ For EACH object listed, fill in, in this order:
   for a bin (open container) or a drawer unit its outer [depth, width, height]
 - mass_g: mass in GRAMS
 - note: under 12 words, e.g. "from quote" or "estimate: typical wooden block"
+- evidence: up to 3 INDEPENDENT sizes for this object from DIFFERENT results (or the search
+  Summary), each {source: URL or "summary", size_mm: [x,y,z] or null, mass_g: number or null};
+  [] if only one source mentions it
+- image: index of the IMAGES entry that shows this exact kind of object, or -1
 Only use a quote about the SAME kind of thing: a result about an Apple iPhone or AirPods is not
 about an apple fruit; a full-size curbside cart is not a desktop bin. If no result matches, estimate.
 Copy numbers from the quote when it has them; convert inches/ounces to mm/g if needed.
@@ -47,6 +56,12 @@ If there is no quote, give a typical real-world value and say "estimate" in the 
 Return JSON only."""
 
 
+class _Evidence(BaseModel):
+    source: str
+    size_mm: tuple[float, float, float] | None
+    mass_g: float | None
+
+
 class _Extracted(BaseModel):
     name: str
     quote: str
@@ -54,10 +69,88 @@ class _Extracted(BaseModel):
     size_mm: tuple[float, float, float]
     mass_g: float
     note: str
+    evidence: list[_Evidence] = []
+    image: int = -1
 
 
 class _Extraction(BaseModel):
     facts: list[_Extracted]
+
+
+# ---------- material physics + robot limits (searched once, cached for every later run) ----------
+PHYS_CACHE = Path(__file__).resolve().parents[2] / ".cache/physics"
+FRICTION_QUERY = {"rubber": "rubber on wood coefficient of friction table", "fruit": "apple fruit friction coefficient on wood measured",
+                  "fabric": "felt fabric coefficient of friction on wood"}
+RESTITUTION_QUERY = {"rubber": "tennis ball rubber ball coefficient of restitution value",
+                     "fruit": "apple fruit coefficient of restitution drop impact measured"}
+ROBOT_QUERIES = {"gripper": "Franka Emika Panda Hand gripper technical data stroke maximum opening",
+                 "arm": "Franka Emika Panda robot arm technical data payload maximum reach"}
+# Typical values (engineering tables), used only when the web gives nothing usable or verifiable.
+TYPICAL = {"rubber": (0.9, 0.75), "wood": (0.4, 0.5), "plastic": (0.35, 0.6), "metal": (0.3, 0.55),
+           "glass": (0.4, 0.6), "ceramic": (0.45, 0.5), "cardboard": (0.5, 0.2), "paper": (0.45, 0.15),
+           "fabric": (0.6, 0.2), "foam": (0.8, 0.1), "fruit": (0.5, 0.35)}
+# Plausible (friction, restitution) ranges per material; web values outside are rejected.
+PLAUSIBLE = {"rubber": ((0.5, 1.2), (0.5, 0.9)), "wood": ((0.2, 0.7), (0.25, 0.7)), "plastic": ((0.15, 0.6), (0.3, 0.8)),
+             "metal": ((0.15, 0.8), (0.2, 0.8)), "glass": ((0.2, 0.9), (0.4, 0.9)), "ceramic": ((0.3, 0.8), (0.3, 0.7)),
+             "cardboard": ((0.3, 0.8), (0.05, 0.4)), "paper": ((0.2, 0.8), (0.05, 0.4)), "fabric": ((0.3, 1.0), (0.05, 0.5)),
+             "foam": ((0.4, 1.2), (0.02, 0.3)), "fruit": ((0.2, 0.9), (0.1, 0.6))}
+ROBOT_TYPICAL = (80.0, 3.0, 855.0)  # Panda Hand stroke 80 mm, payload 3 kg, reach 855 mm
+MAX_UNCACHED = 5  # Tavily searches per run that are not served from the cache (CLAUDE.md budget)
+
+PHYS_SYSTEM = """You extract physical constants from web search results, for a robot simulation.
+Blocks are labelled MATERIAL <m> FRICTION, MATERIAL <m> RESTITUTION, ROBOT GRIPPER, ROBOT ARM.
+- friction: sliding (kinetic) friction coefficient of that material on a wooden or similar table.
+- restitution: coefficient of restitution of an object of that material dropped on a hard surface
+  (0 = no bounce, 1 = perfect bounce). It is NOT a friction coefficient.
+- robot: the Franka Emika Panda Hand's maximum gripper opening (stroke) in mm; the arm's payload in kg
+  and maximum reach in mm.
+For every number, copy the EXACT text it appears in, character for character, as its quote (at least
+6 words), and give that result's URL. If a block does not state the number, set the value to 0 and
+the quote to "". Never write a quote that is not in the results. Return JSON only."""
+
+
+class _MaterialEx(BaseModel):
+    material: str
+    friction: float
+    friction_quote: str
+    friction_source: str | None
+    restitution: float
+    restitution_quote: str
+    restitution_source: str | None
+
+
+class _RobotEx(BaseModel):
+    gripper_opening_mm: float
+    gripper_quote: str
+    gripper_source: str | None
+    payload_kg: float
+    reach_mm: float
+    arm_quote: str
+    arm_source: str | None
+
+
+class _PhysicsEx(BaseModel):
+    materials: list[_MaterialEx]
+    robot: _RobotEx | None
+
+
+def _norm(t: str) -> str:
+    t = t.lower().replace("\u2019", "'").replace("\u2013", "-").replace("\u2014", "-")
+    t = re.sub(r"[*_`#>|\[\]()]", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def verified(quote: str, corpus: str) -> bool:
+    """True if the quote (or a substantial piece of it) appears in the fetched text and its numbers
+    do too. Guards against a model inventing a citation."""
+    q = _norm(quote)
+    if len(q) < 12:
+        return False
+    nums = re.findall(r"\d+(?:\.\d+)?", q)
+    if nums and not all(n in corpus for n in nums):
+        return False
+    pieces = [p.strip() for p in re.split(r"\.\.\.|…|;| - ", q) if len(p.strip()) >= 12]
+    return any(p in corpus for p in pieces) or q in corpus
 
 
 def _volume(size: tuple[float, float, float], shape: str) -> float:
@@ -131,27 +224,131 @@ def _fit_drawers(task: TaskSpec, facts: GroundedFacts) -> None:
 
 
 @traceable(name="tavily_search", run_type="retriever")
-def search(query: str) -> tuple[dict, bool]:
+def search(query: str, images: bool = True) -> tuple[dict, bool]:
     """Tavily search with disk cache. Returns (response, was_cached)."""
     CACHE.mkdir(parents=True, exist_ok=True)
-    f = CACHE / (hashlib.sha256(query.strip().lower().encode()).hexdigest()[:16] + ".json")
+    key = ("v2:" if images else "") + query.strip().lower()  # v2: results include product images
+    f = CACHE / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".json")
     if f.exists():
         return json.loads(f.read_text()), True
-    res = TavilyClient(config.TAVILY_API_KEY).search(query, max_results=4, include_answer="basic")
+    res = TavilyClient(config.TAVILY_API_KEY).search(query, max_results=4, include_answer="basic",
+                                                     include_images=images, include_image_descriptions=images)
     f.write_text(json.dumps(res))
     return res, False
+
+
+def _agreement(e: _Extracted, fact: ObjectFact) -> tuple[int, int]:
+    """(sources that gave a size, how many of them agree with the chosen size within 20%)."""
+    sizes = [ev.size_mm for ev in e.evidence if ev.size_mm and max(ev.size_mm) > 0]
+    if e.quote.strip():
+        sizes = [e.size_mm, *sizes]
+    chosen = max(fact.size) * 1000
+    agree = sum(1 for sz in sizes if abs(max(sz) - chosen) <= 0.2 * chosen)
+    return len(sizes), agree
+
+
+def _clamp(v: float, lo_hi: tuple[float, float]) -> tuple[float, bool]:
+    lo, hi = lo_hi
+    return min(max(v, lo), hi), not lo <= v <= hi
+
+
+def _block(label: str, q: str, res: dict) -> str:
+    lines = [f"## {label}  (search: {q})"]
+    if res.get("answer"):
+        lines.append(f"Summary: {res['answer']}")
+    lines += [f"- [{r.get('title', '')}]({r['url']}): {r.get('content', '')[:700]}" for r in res.get("results", [])]
+    return "\n".join(lines)
+
+
+@traceable(name="physics_facts")
+def physics_facts(materials: list[str], budget: int) -> tuple[list[MaterialFact], RobotFact, list[CallStat], dict]:
+    """Material friction/bounciness and robot limits, cached forever; uncached ones are searched
+    (within `budget` searches), extracted by Nano in one call, and kept only if their quotes are
+    found in the fetched text and the values are physically plausible."""
+    PHYS_CACHE.mkdir(parents=True, exist_ok=True)
+    mats, todo = {}, []
+    for m in materials:
+        f = PHYS_CACHE / f"material_{m}.json"
+        if f.exists():
+            mats[m] = MaterialFact(**json.loads(f.read_text()))
+        else:
+            todo.append(m)
+    rf = PHYS_CACHE / "robot_franka_panda.json"
+    robot = RobotFact(**json.loads(rf.read_text())) if rf.exists() else None
+    stats, info = [], {"searched": [], "cached": sorted(mats) + (["robot"] if robot else [])}
+    wanted = [("ROBOT GRIPPER", ROBOT_QUERIES["gripper"]), ("ROBOT ARM", ROBOT_QUERIES["arm"])] if robot is None else []
+    for m in todo:
+        wanted += [(f"MATERIAL {m} FRICTION", FRICTION_QUERY.get(m, f"{m} on wood coefficient of friction table")),
+                   (f"MATERIAL {m} RESTITUTION", RESTITUTION_QUERY.get(m, f"{m} coefficient of restitution value"))]
+    blocks = []
+    for label, q in wanted[:budget]:
+        try:
+            res, _ = search(q, images=False)
+        except Exception as e:  # noqa: BLE001
+            blocks.append(f"## {label}\n(search failed: {e})")
+            continue
+        info["searched"].append(q)
+        blocks.append(_block(label, q, res))
+    corpus = _norm("\n".join(blocks))
+    searched_mats = {b.split("\n")[0].split()[2] for b in blocks if b.startswith("## MATERIAL")}
+    if blocks:
+        ex, stats = chat_json("grounder_physics", config.NANO, PHYS_SYSTEM, "\n\n".join(blocks), _PhysicsEx,
+                              max_tokens=2500, temperature=0.1, thinking=False)
+        for me in ex.materials:
+            m = me.material.strip().lower()
+            if m not in todo or m not in searched_mats:
+                continue
+            (flo, fhi), (rlo, rhi) = PLAUSIBLE.get(m, ((0.1, 1.2), (0.05, 0.9)))
+            typ_f, typ_r = TYPICAL.get(m, (0.5, 0.4))
+            notes = []
+            f_ok = flo <= me.friction <= fhi and verified(me.friction_quote, corpus)
+            r_ok = rlo <= me.restitution <= rhi and verified(me.restitution_quote, corpus)
+            if not f_ok:
+                notes.append("friction: typical value" + (f" (web {me.friction:g} rejected)" if me.friction else ""))
+            if not r_ok:
+                notes.append("bounciness: typical value" + (f" (web {me.restitution:g} rejected)" if me.restitution else ""))
+            mats[m] = MaterialFact(
+                material=m, friction=round(me.friction if f_ok else typ_f, 3), restitution=round(me.restitution if r_ok else typ_r, 3),
+                friction_source=me.friction_source if f_ok else None, friction_quote=me.friction_quote[:240] if f_ok else "",
+                restitution_source=me.restitution_source if r_ok else None,
+                restitution_quote=me.restitution_quote[:240] if r_ok else "", note="; ".join(notes))
+            (PHYS_CACHE / f"material_{m}.json").write_text(mats[m].model_dump_json())
+        if ex.robot and robot is None and any(b.startswith("## ROBOT") for b in blocks):
+            r = ex.robot
+            g_ok = 60 <= r.gripper_opening_mm <= 120 and verified(r.gripper_quote, corpus)
+            a_ok = 1 <= r.payload_kg <= 10 and 600 <= r.reach_mm <= 1200 and verified(r.arm_quote, corpus)
+            robot = RobotFact(
+                gripper_opening_mm=r.gripper_opening_mm if g_ok else ROBOT_TYPICAL[0],
+                payload_kg=r.payload_kg if a_ok else ROBOT_TYPICAL[1], reach_mm=r.reach_mm if a_ok else ROBOT_TYPICAL[2],
+                gripper_source=r.gripper_source if g_ok else None, gripper_quote=r.gripper_quote[:240] if g_ok else "",
+                arm_source=r.arm_source if a_ok else None, arm_quote=r.arm_quote[:240] if a_ok else "",
+                note="; ".join(x for x in ("" if g_ok else "gripper: spec-sheet value (web quote not verified)",
+                                           "" if a_ok else "arm: spec-sheet value (web quote not verified)") if x))
+            rf.write_text(robot.model_dump_json())
+    for m in materials:  # anything still missing (search budget): labelled typical value, not cached
+        if m not in mats:
+            fr, re_ = TYPICAL.get(m, (0.5, 0.4))
+            mats[m] = MaterialFact(material=m, friction=fr, restitution=re_, note="typical value (not searched yet)")
+    if robot is None:
+        robot = RobotFact(gripper_opening_mm=ROBOT_TYPICAL[0], payload_kg=ROBOT_TYPICAL[1], reach_mm=ROBOT_TYPICAL[2],
+                          note="spec-sheet values (not searched yet)")
+    return [mats[m] for m in materials], robot, stats, info
 
 
 @traceable(name="grounder")
 def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[CallStat]]:
     """Returns facts, the source list for the UI, Tavily stats, and LLM call stats."""
-    blocks, sources, cached, t0 = [], [], 0, time.time()
-    for q in task.search_queries[:MAX_SEARCHES]:
+    blocks, sources, images, cached, t0 = [], [], [], 0, time.time()
+    search_s = 0.0
+    queries = task.search_queries[:MAX_SEARCHES]
+    for q in queries:
+        ts = time.time()
         try:
             res, hit = search(q)
         except Exception as e:  # noqa: BLE001 - network/quota problems must not kill the run
             blocks.append(f"## Search: {q}\n(search failed: {e})")
             continue
+        search_s += time.time() - ts
         cached += hit
         lines = [f"## Search: {q}"]
         if res.get("answer"):
@@ -160,17 +357,42 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
             sources.append(Source(title=r.get("title", r["url"])[:90], url=r["url"]))
             lines.append(f"- [{r.get('title', '')}]({r['url']}): {r.get('content', '')[:600]}")
         blocks.append("\n".join(lines))
-    tavily_stats = {"queries": task.search_queries[:MAX_SEARCHES], "cached": cached,
-                    "latency_s": round(time.time() - t0, 2)}
+        for im in res.get("images", []) or []:
+            url, desc = (im.get("url"), im.get("description", "")) if isinstance(im, dict) else (im, "")
+            if url:
+                images.append((url, (desc or "")[:140]))
+    img_block = "\n".join(f"[{i}] {d or '(no description)'}" for i, (_, d) in enumerate(images[:12]))
 
     objects = "\n".join(f"- {o.name}: {o.description} ({o.shape}, {o.color})" for o in task.objects)
-    user = f"Objects:\n{objects}\n\nSearch results:\n" + "\n\n".join(blocks)
-    ex, stats = chat_json("grounder", config.NANO, SYSTEM, user, _Extraction, max_tokens=3000,
+    user = (f"Objects:\n{objects}\n\nSearch results:\n" + "\n\n".join(blocks)
+            + f"\n\nIMAGES:\n{img_block or '(none)'}")
+    ex, stats = chat_json("grounder", config.NANO, SYSTEM, user, _Extraction, max_tokens=4000,
                           temperature=0.1, thinking=False)
     shapes = {o.name: o.shape for o in task.objects}
     priors = {o.name: o.approx_size_cm for o in task.objects}
-    facts = GroundedFacts(facts=[_to_fact(e, shapes.get(e.name, "box"), priors.get(e.name)) for e in ex.facts])
+    mats = {o.name: o.material for o in task.objects}
+    out = []
+    corpus = _norm("\n".join(blocks))
+    for e in ex.facts:
+        if e.quote.strip() and not verified(e.quote, corpus):  # invented citation: keep numbers, drop the source
+            e = e.model_copy(update={"quote": "", "evidence": [], "note": "estimate (quote not found in sources)"})
+        f = _to_fact(e, shapes.get(e.name, "box"), priors.get(e.name))
+        checked, agree = _agreement(e, f) if not f.note.startswith("web size") else (0, 0)
+        f.sources_checked, f.sources_agree = checked, agree
+        f.material = mats.get(e.name)
+        if 0 <= e.image < min(len(images), 12) and not f.note.startswith("web size"):
+            f.image_url = images[e.image][0]
+        out.append(f)
+    facts = GroundedFacts(facts=out)
     _fit_drawers(task, facts)
+
+    uncached_used = len(queries) - cached
+    materials = sorted({o.material for o in task.objects})
+    facts.materials, facts.robot, pstats, pinfo = physics_facts(materials, max(0, MAX_UNCACHED - uncached_used))
+    stats += pstats
+    tavily_stats = {"queries": queries, "cached": cached, "latency_s": round(search_s, 2),
+                    "total_s": round(time.time() - t0, 2),
+                    "physics_searched": pinfo["searched"], "physics_cached": pinfo["cached"]}
     # Keep the sources list short and unique for the UI.
     seen, uniq = set(), []
     for s in sources:

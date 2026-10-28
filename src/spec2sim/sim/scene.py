@@ -188,7 +188,30 @@ _SHAPES = {"box": mujoco.mjtGeom.mjGEOM_BOX, "cylinder": mujoco.mjtGeom.mjGEOM_C
            "sphere": mujoco.mjtGeom.mjGEOM_SPHERE}
 
 
-def _add_objects(spec: mujoco.MjSpec, objects: list[SceneObject], grasp_welds: bool) -> None:
+DEFAULT_FRICTION = 1.5  # used when no material physics is known (runs recorded before it existed)
+
+
+# Measured: restitution MuJoCo actually produces (ball dropped 40 cm, timestep 2 ms) for a contact
+# damping ratio, with solref time constant 0.02 s. The textbook spring-damper formula overshoots
+# (the integrator adds energy at low damping), so we invert this measured curve instead.
+_E_OF_DAMPING = [(1.0, 0.06), (0.7, 0.11), (0.5, 0.23), (0.4, 0.29), (0.3, 0.38), (0.2, 0.48), (0.1, 0.60), (0.05, 0.69)]
+SIM_RESTITUTION_RANGE = (0.06, 0.69)
+
+
+def contact_params(physics: tuple[float, float] | None) -> dict:
+    """MuJoCo contact settings from (friction, restitution) found on the web.
+    solmix makes the object's settings dominate the floor's when the two are combined."""
+    if not physics:
+        return {"friction": [DEFAULT_FRICTION, 0.05, 0.001], "solref": [0.01, 1]}
+    mu, e = physics
+    e = min(max(e, SIM_RESTITUTION_RANGE[0]), SIM_RESTITUTION_RANGE[1])
+    damping = float(np.interp(e, [p[1] for p in _E_OF_DAMPING], [p[0] for p in _E_OF_DAMPING]))
+    return {"friction": [float(mu), 0.005, 0.0001], "solref": [0.02, damping], "solmix": 10.0}
+
+
+def _add_objects(spec: mujoco.MjSpec, objects: list[SceneObject], grasp_welds: bool,
+                 physics: dict[str, tuple[float, float]] | None = None) -> None:
+    physics = physics or {}
     for o in objects:
         quat = [np.cos(o.yaw / 2), 0, 0, np.sin(o.yaw / 2)]
         body = spec.worldbody.add_body(name=OBJ_PREFIX + o.name, pos=list(o.pos), quat=quat)
@@ -201,24 +224,26 @@ def _add_objects(spec: mujoco.MjSpec, objects: list[SceneObject], grasp_welds: b
             _add_drawer(spec, body, o, grasp_welds)
             continue
         body.add_geom(type=_SHAPES[o.shape], size=_geom_size(o), rgba=list(o.rgba), mass=o.mass,
-                      friction=[1.5, 0.05, 0.001], condim=4, solref=[0.01, 1])
+                      condim=4, **contact_params(physics.get(o.name)))
         if grasp_welds and not o.fixed:
             spec.add_equality(type=mujoco.mjtEq.mjEQ_WELD, objtype=mujoco.mjtObj.mjOBJ_BODY,
                               name1="hand", name2=OBJ_PREFIX + o.name, active=False,
                               name=f"grip/{o.name}")
 
 
-def objects_mjcf(objects: list[SceneObject]) -> str:
+def objects_mjcf(objects: list[SceneObject], physics: dict[str, tuple[float, float]] | None = None) -> str:
     """The generated objects as a standalone MJCF file (no robot), for export. Load it next to any
     robot, e.g. MuJoCo Menagerie's franka_emika_panda/scene.xml, via <include> or MjSpec.attach."""
     objects = [o.model_copy(update={"fixed": True}) if o.shape in ("bin", "drawer") else o for o in objects]
     spec = mujoco.MjSpec()
     spec.modelname = "spec2sim_objects"
-    _add_objects(spec, objects, grasp_welds=False)
+    _add_objects(spec, objects, grasp_welds=False, physics=physics)
     return spec.to_xml()
 
 
-def build_scene(objects: list[SceneObject], allowed: set[str] | None = None) -> Scene:
+def build_scene(objects: list[SceneObject], allowed: set[str] | None = None,
+                physics: dict[str, tuple[float, float]] | None = None) -> Scene:
+    """physics: object name -> (friction, restitution) from the Grounder's web lookups."""
     validate_objects(objects, allowed)
     # Bins and drawer cabinets are furniture: never free bodies (a drawer's handle can be grasped).
     objects = [o.model_copy(update={"fixed": True}) if o.shape in ("bin", "drawer") else o for o in objects]
@@ -226,7 +251,7 @@ def build_scene(objects: list[SceneObject], allowed: set[str] | None = None) -> 
     spec.visual.global_.offwidth, spec.visual.global_.offheight = RENDER_W, RENDER_H
     spec.body("hand").add_site(name="tcp", pos=[0, 0, TCP_OFFSET], size=[0.005, 0, 0])
 
-    _add_objects(spec, objects, grasp_welds=True)
+    _add_objects(spec, objects, grasp_welds=True, physics=physics)
     try:
         model = spec.compile()
     except Exception as e:  # MuJoCo compile errors are plain exceptions

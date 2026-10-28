@@ -36,24 +36,32 @@ def repair_model(attempt_failed: int) -> config.ModelInfo:
 
 
 def infeasible(task: TaskSpec, facts: GroundedFacts) -> str | None:
-    """Check in code, before spending on a build, whether the grounded objects can be grasped at all.
+    """Check in code, before spending on a build, whether the grounded objects can be held at all.
 
-    The Panda's parallel gripper opens 8 cm; an object whose narrowest horizontal side is wider than
-    that cannot be picked up, whatever the plan. Better to say so than to burn repair attempts.
+    Both sides of the comparison are sourced: the object's size and mass come from the web, and so
+    do the Franka gripper's opening and payload (from its spec sheet, via the Grounder). The usable
+    opening keeps a 2 mm margin. Better to say so than to burn repair attempts.
     """
     shapes = {o.name: o.shape for o in task.objects}
-    sizes = {f.name: f.size for f in facts.facts}
+    by = {f.name: f for f in facts.facts}
+    robot = facts.robot
+    opening = (robot.gripper_opening_mm - 2) / 1000 if robot else MAX_GRASP_WIDTH
+    payload = robot.payload_kg if robot else 3.0
+    src = f" ({robot.gripper_source})" if robot and robot.gripper_source else ""
     # Only objects that must be picked up need to fit the gripper (pushing or knocking over doesn't).
     movers = {g.obj for g in task.goals if g.type not in ("upright", "toppled", "opened", "closed")}
     for name in sorted(movers):
-        if name not in sizes or shapes.get(name) in ("bin", "drawer"):
+        f = by.get(name)
+        if f is None or shapes.get(name) in ("bin", "drawer"):
             continue
-        sx, sy, _ = sizes[name]
+        sx, sy, _ = f.size
         width = min(sx, sy) if shapes.get(name) == "box" else max(sx, sy)
-        if width > MAX_GRASP_WIDTH:
-            return (f"{name} is {width * 100:.1f} cm wide at its narrowest (real-world size from the "
-                    f"Grounder), but the Franka gripper opens only {MAX_GRASP_WIDTH * 100:.1f} cm, "
-                    "so no motion plan can pick it up.")
+        if width > opening:
+            return (f"{name} is {width * 100:.1f} cm wide at its narrowest (real-world size from the web"
+                    f"{f' ({f.source_url})' if f.source_url else ''}), but the Franka gripper opens only "
+                    f"{opening * 100:.1f} cm (spec sheet{src}), so no motion plan can pick it up.")
+        if f.mass > payload:
+            return (f"{name} weighs {f.mass:.1f} kg, more than the Franka's {payload:g} kg payload (spec sheet{src}).")
     return None
 
 
@@ -104,7 +112,7 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
         for n in notes:
             yield _ev("note", message=n)
         yield _ev("step", step="runner", status="running", attempt=attempt)
-        result = _traced_run(b, task.goals, out / f"attempt{attempt}", {o.name for o in task.objects})
+        result = _traced_run(b, task.goals, out / f"attempt{attempt}", {o.name for o in task.objects}, facts.physics())
         yield _ev("step", step="runner", status="done", attempt=attempt, data=_public(result, run_id))
         if result.success:
             break
@@ -135,7 +143,7 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
 
     if result and result.success and config.STRESS_TRIALS > 0:
         yield _ev("step", step="stress", status="running", trials=config.STRESS_TRIALS)
-        st = _traced_stress(b, task.goals, config.STRESS_TRIALS)
+        st = _traced_stress(b, task.goals, config.STRESS_TRIALS, facts.physics())
         yield _ev("step", step="stress", status="done", data=st)
 
     yield _ev("done", success=bool(result and result.success), attempts=attempt,
@@ -162,13 +170,13 @@ def fit_furniture(b) -> tuple[object, list[str]]:
 
 
 @traceable(name="stress_test", run_type="tool")
-def _traced_stress(b, goals, trials: int) -> dict:
-    return runner.stress_test(b, goals, trials=trials)
+def _traced_stress(b, goals, trials: int, physics: dict) -> dict:
+    return runner.stress_test(b, goals, trials=trials, physics=physics)
 
 
 @traceable(name="runner", run_type="tool")
-def _traced_run(b, goals, out_dir: Path, allowed: set[str]):
-    return runner.run(b, goals, out_dir, allowed)
+def _traced_run(b, goals, out_dir: Path, allowed: set[str], physics: dict):
+    return runner.run(b, goals, out_dir, allowed, physics)
 
 
 def _public(r, run_id: str) -> dict:

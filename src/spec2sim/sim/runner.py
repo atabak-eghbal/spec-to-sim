@@ -28,10 +28,10 @@ def _smoothstep(x: float) -> float:
 
 class _Sim:
     def __init__(self, build: Build, out_dir: Path | None, allowed: set[str] | None = None,
-                 tweak=None):
+                 tweak=None, physics: dict | None = None):
         """out_dir=None: physics only, nothing rendered or recorded (used by the stress test).
         tweak(model): optional hook to perturb the compiled model (e.g. friction)."""
-        self.scene = build_scene(build.objects, allowed)
+        self.scene = build_scene(build.objects, allowed, physics)
         self.m = self.scene.model
         self.d = mujoco.MjData(self.m)
         self.d.qpos[self.scene.arm_qpos] = HOME_Q
@@ -167,11 +167,13 @@ class _Sim:
                 self.event(f"{name} fell out of the workspace")
 
 
-def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None = None) -> RunResult:
-    """`allowed`: the task's object names (the Builder may not add or drop objects)."""
+def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None = None,
+        physics: dict | None = None) -> RunResult:
+    """`allowed`: the task's object names (the Builder may not add or drop objects).
+    `physics`: object name -> (friction, restitution) from the web."""
     t0 = time.time()
     try:
-        sim = _Sim(build, out_dir, allowed)
+        sim = _Sim(build, out_dir, allowed, physics=physics)
     except SceneError as e:
         return RunResult(success=False, goals=[], events=[], error=str(e))
 
@@ -257,7 +259,7 @@ def perturb(build: Build, rng, pos_jitter: float = 0.015, yaw_jitter: float = 0.
 
 def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0,
                 pos_jitter: float = 0.015, yaw_jitter: float = 0.15, mass_scale: float = 0.2,
-                friction_scale: float = 0.3) -> dict:
+                friction_scale: float = 0.3, physics: dict | None = None) -> dict:
     """Re-run a plan under random perturbations, physics only (no rendering, no model calls).
 
     Like Isaac Lab-Arena's sensitivity analysis: does the plan still work if each object starts up
@@ -273,7 +275,7 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0
         b, tweak, change = perturb(build, rng, pos_jitter, yaw_jitter, mass_scale, friction_scale)
         fk = change.pop("_friction_x")
         try:
-            sim = _Sim(b, None, tweak=tweak)
+            sim = _Sim(b, None, tweak=tweak, physics=physics)
         except SceneError:
             continue  # jitter made two objects overlap: draw again
         err = _execute(sim, b)

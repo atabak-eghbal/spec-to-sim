@@ -23,6 +23,9 @@ A small cabinet with a sliding drawer is shape "drawer" (describe it as a tablet
 e.g. "small desktop drawer organizer"); the robot can pull it open by its handle and push it shut.
 
 Object names: short snake_case like red_cube, soda_can, tennis_ball. Colors: plain names.
+material: what the object's surface is mostly made of: rubber (balls), wood (toy blocks), plastic,
+metal (cans), glass, ceramic, cardboard, paper, fabric, foam, fruit. It sets the simulated friction
+and bounciness, which are looked up on the web.
 approx_size_cm: your own estimate of the object's typical size (a toy block ~[3,3,3], a soda can
 [6.6,6.6,12.2], an apple ~[7.5,7.5,7.5]); web results that disagree wildly are rejected.
 

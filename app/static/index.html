@@ -110,6 +110,11 @@ button.run:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent)
 .facts th { font: 500 0.66rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .facts td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl-scroll { overflow-x: auto; }
+.facts td.thumb { width: 2.6rem; padding-right: 0.3rem; }
+.facts td.thumb img { width: 2.3rem; height: 2.3rem; object-fit: cover; border-radius: 4px; display: block; background: var(--rule); }
+.facts .sub { font: 400 0.68rem/1.3 var(--mono); color: var(--muted); }
+.facts.phys td { font-size: 0.76rem; }
+.muted { color: var(--muted); }
 .checks { margin: 0.1rem 0 0; padding-left: 1.1rem; font: 400 0.76rem/1.45 var(--mono); color: var(--muted); }
 .checks b { color: var(--ink); font-weight: 500; }
 .src { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -352,16 +357,33 @@ function stepBody(s) {
       return `<p>${esc(d.summary)}</p>
         <p class="mono" style="font-size:.78rem">objects: ${d.objects.map((o) => esc(o.name)).join(", ")}<br>goals: ${d.goals.map((g) => esc(g.type + "(" + [g.obj, g.target].filter(Boolean).join(", ") + (g.xyz ? ", " + g.xyz.join(", ") : "") + ")")).join("  ")}</p>`;
     case "grounder": {
-      const rows = d.facts.map((f) => `<tr><td>${esc(f.name)}</td><td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
-        <td>${f.source_url ? `<a href="${esc(f.source_url)}" target="_blank" rel="noopener">source</a>` : /rejected/.test(f.note || "") ? `<span class="pill p-bad">web rejected</span>` : `<span class="pill p-warn">estimate</span>`}</td></tr>`).join("");
-      // Sanity checks on web data, shown so nothing is silently changed.
-      const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit/.test(f.note || ""))
+      const mats = Object.fromEntries((d.materials || []).map((m) => [m.material, m]));
+      const conf = (f) => /rejected/.test(f.note || "") ? `<span class="pill p-bad">web rejected</span>`
+        : !f.source_url ? `<span class="pill p-warn">estimate</span>`
+        : f.sources_checked > 1 ? `<span class="pill ${f.sources_agree >= 2 ? "p-ok" : "p-warn"}" title="independent sources that gave a size / that agree within 20%">${f.sources_agree}/${f.sources_checked} agree</span>`
+        : `<span class="pill p-ok">1 source</span>`;
+      const rows = d.facts.map((f) => {
+        const m = f.material && mats[f.material];
+        return `<tr><td class="thumb">${f.image_url ? `<img src="${esc(f.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</td>
+        <td>${esc(f.name)}${m ? `<div class="sub">${esc(f.material)} · μ ${m.friction} · bounce ${m.restitution}</div>` : ""}</td>
+        <td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
+        <td>${f.source_url ? `<a href="${esc(f.source_url)}" target="_blank" rel="noopener">source</a> ` : ""}${conf(f)}</td></tr>`;
+      }).join("");
+      const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit|not found/.test(f.note || ""))
         .map((f) => `<li><b>${esc(f.name)}</b>: ${esc(f.note)}</li>`).join("");
+      const lnk = (u, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : `<span class="muted">${t === "src" ? "typical" : t}</span>`;
+      const phys = (d.materials || []).map((m) => `<tr><td>${esc(m.material)}</td><td class="n">μ ${m.friction} ${lnk(m.friction_source, "src")}</td>
+        <td class="n">bounce ${m.restitution} ${lnk(m.restitution_source, "src")}</td></tr>`).join("");
+      const r = d.robot;
+      const robot = r ? `<p class="mono" style="font-size:.74rem">Franka limits: gripper opens <b>${r.gripper_opening_mm} mm</b> ${lnk(r.gripper_source, "src")} · payload <b>${r.payload_kg} kg</b> · reach <b>${r.reach_mm} mm</b> ${lnk(r.arm_source, "src")}</p>` : "";
       const tv = s.tavily || {};
       const srcs = (s.sources || []).map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.title)}</a>`).join("");
-      return `<p class="mono" style="font-size:.75rem"><span class="badge b-Tavily">Tavily</span> ${(tv.queries || []).length} searches${tv.cached ? `, ${tv.cached} from cache` : ""} · ${fmtS(tv.latency_s || 0)}</p>
-        <div class="tbl-scroll"><table class="facts"><thead><tr><th>Object</th><th>Real size</th><th>Mass</th><th>From</th></tr></thead><tbody>${rows}</tbody></table></div>
+      const physSearch = (tv.physics_searched || []).length ? ` + ${tv.physics_searched.length} physics` : "";
+      return `<p class="mono" style="font-size:.75rem"><span class="badge b-Tavily">Tavily</span> ${(tv.queries || []).length} searches${physSearch}${tv.cached ? `, ${tv.cached} from cache` : ""} · ${fmtS(tv.latency_s || 0)}</p>
+        <div class="tbl-scroll"><table class="facts"><thead><tr><th></th><th>Object</th><th>Real size</th><th>Mass</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table></div>
         ${checks ? `<ul class="checks">${checks}</ul>` : ""}
+        ${phys ? `<details class="more" open><summary>Physics from the web (friction, bounciness)</summary><table class="facts phys"><tbody>${phys}</tbody></table></details>` : ""}
+        ${robot}
         ${srcs ? `<details class="more"><summary>${(s.sources || []).length} web sources</summary><div class="src" style="margin-top:.4rem">${srcs}</div></details>` : ""}`;
     }
     case "builder":

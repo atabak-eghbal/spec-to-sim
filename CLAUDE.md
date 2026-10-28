@@ -26,7 +26,7 @@ itself until the task succeeds. Every step is traced in **LangSmith** and shown 
 - [ ] Feedback questions answered thoughtfully (eligible for "Most Valuable Feedback").
 
 ## 3. Prize strategy (what every decision should serve)
-1. **Physical AI Track** (or an Overall award) + **Best Use of Tavily** bonus ($3K) + **Most Valuable Feedback**.
+1. **Grand prize** (Overall) + **Best Use of Tavily** bonus ($3K) + **Most Valuable Feedback**. Physical AI is our track.
 2. Judging criteria are equally weighted — optimise all four:
    - **Technological Implementation** → real cascade, Serverless Endpoint + Serverless Job, LangSmith traces, deterministic success checks.
    - **Design** → a complete product with a polished UI, not a script.
@@ -39,7 +39,7 @@ itself until the task succeeds. Every step is traced in **LangSmith** and shown 
 | Step | Role | Model / service | Why this one |
 |---|---|---|---|
 | 1 | **Planner**: English → structured task spec (JSON) | Nemotron 3 Super | Good tool-calling/JSON, cheap |
-| 2 | **Grounder**: real object/robot facts with source links | **Tavily** search + Nemotron Nano to extract numbers | Real dimensions/masses; runtime Tavily call |
+| 2 | **Grounder**: real object/robot facts with source links | **Tavily** search + Nemotron Nano to extract numbers | Real dimensions/masses, material friction/bounciness, robot limits, cross-checked across sources; runtime Tavily call |
 | 3 | **Builder**: scene objects (MJCF fragment) + motion plan (waypoint JSON) | Nemotron 3 Super | Structured output |
 | 4 | **Runner**: run MuJoCo headless, render MP4, compute success metrics | Our code (inside Nebius Serverless Endpoint container) | Deterministic |
 | 5 | **Critic**: watch frames + metrics, diagnose failure | **Nemotron 3.5 Super VL** | Image/video understanding |
@@ -60,7 +60,7 @@ Loop: max **4 iterations**. Attempt 1–2 repaired by Super; attempt 3+ escalate
 | Credit | Amount | Rule |
 |---|---|---|
 | Token Factory | $50 | Use Nano/Super by default; Ultra only on escalation. Log cost per call. Hard stop if dev spend > $20. |
-| Tavily | $25 | Cache results on disk by query hash. ≤ 3 searches per run. |
+| Tavily | $25 | Cache results on disk by query hash. ≤ 3 *object* searches per run, plus cached shared lookups (material physics, robot specs); ≤ 5 uncached searches per run in total. (Changed Oct 28 with Austin's approval.) |
 | LangSmith | $100 | Trace everything in dev and prod. |
 | Nebius AI Cloud | (check) | Serverless is billed per second while running. **Stop dev endpoints when idle.** Smallest CPU preset that works. |
 | Toloka / Tandem | $50 / $50 | Not required. Ignore unless a natural use appears. |
