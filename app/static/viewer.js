@@ -187,6 +187,15 @@ export class SimViewer {
     this.controls.maxPolarAngle = Math.PI * 0.49;
     this.controls.minDistance = 0.5;
     this.controls.maxDistance = 3.5;
+    // ?orbit=1: slow automatic orbit (for videos); ?clean=1 hides the mouse hint.
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("theater") === "1") {  // full-window shots: frame the workspace tighter
+      this.camera.position.set(1.22, -0.82, 0.72);
+      this.controls.target.set(0.44, 0, 0.17);
+    }
+    this.controls.autoRotate = qs.get("orbit") === "1";
+    this.controls.autoRotateSpeed = 0.25;
+    this.clean = qs.get("clean") === "1";
 
     this.#stage();
     this.#ui();
@@ -266,6 +275,7 @@ export class SimViewer {
     this.styleBtn.onclick = () => this.setStyle(this.style === "realistic" ? "plain" : "realistic");
     this.range.oninput = () => { this.t = (this.range.value / 1000) * this.duration; this.setPlaying(false); };
     this.renderer.domElement.addEventListener("pointerdown", () => { this.hint.style.opacity = 0; }, { once: true });
+    if (this.clean) this.hint.style.display = "none";
   }
 
   setPlaying(p) {

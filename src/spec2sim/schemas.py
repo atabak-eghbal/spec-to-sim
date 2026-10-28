@@ -66,6 +66,9 @@ class TaskSpec(BaseModel):
     @model_validator(mode="after")
     def _goals_reference_objects(self) -> TaskSpec:
         """Every goal must name declared objects; a bad reference goes back to the model to fix."""
+        for o in self.objects:  # a "rubiks_cube" once came back as a black cylinder
+            if any(w in o.name.lower() for w in ("cube", "block", "brick", "box")) and o.shape not in ("box", "bin", "drawer"):
+                raise ValueError(f"'{o.name}' sounds box-shaped but has shape '{o.shape}'; use shape 'box'")
         names = {o.name for o in self.objects}
         bins = {o.name for o in self.objects if o.shape in ("bin", "drawer")}
         drawers = {o.name for o in self.objects if o.shape == "drawer"}
