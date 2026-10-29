@@ -173,3 +173,17 @@ def test_incomplete_web_size_falls_back_to_estimate():
     e = _Extracted(name="bin", quote="q", source_url="http://s", size_mm=(300, 0, 150), mass_g=500, note="x")
     f = _to_fact(e, "box", prior_cm=(20, 15, 10), material="plastic")
     assert min(f.size) > 0 and "incomplete" in f.note
+
+
+def test_evidence_must_be_checkable():
+    """An agreement vote counts only if its page was returned by Tavily, once per page, with the number in it."""
+    from spec2sim.grounder import _Evidence, _Extracted, _verified_evidence
+    ev = [_Evidence(source="http://a", size_mm=(66, 66, 123), mass_g=None),
+          _Evidence(source="http://a", size_mm=(66, 66, 123), mass_g=None),   # same page twice
+          _Evidence(source="http://b", size_mm=(66, 66, 123), mass_g=None),   # number not on the page
+          _Evidence(source="summary", size_mm=(66, 66, 123), mass_g=None),    # the search summary
+          _Evidence(source="http://c", size_mm=(66, 66, 123), mass_g=None)]   # 4.84 in = 12.3 cm
+    e = _Extracted(name="can", quote="q", source_url="http://main", size_mm=(66, 66, 123), mass_g=380, note="", evidence=ev)
+    pages = {"http://a": "a standard can is 12.3 cm tall", "http://b": "cans come in many sizes", "http://c": "height 4.84 in"}
+    kept = _verified_evidence(e, pages)
+    assert [k.source for k in kept] == ["http://a", "http://c"]

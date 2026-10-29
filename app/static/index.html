@@ -434,7 +434,7 @@ function stepBody(s) {
       const mats = Object.fromEntries((d.materials || []).map((m) => [m.material, m]));
       const conf = (f) => /rejected/.test(f.note || "") ? `<span class="pill p-bad">web rejected</span>`
         : !f.source_url ? `<span class="pill p-warn">estimate</span>`
-        : f.sources_checked > 1 ? `<span class="pill ${f.sources_agree >= 2 ? "p-ok" : "p-warn"}" title="independent sources that gave a size / that agree within 20%">${f.sources_agree}/${f.sources_checked} agree</span>`
+        : f.sources_checked > 1 ? `<span class="pill ${f.sources_agree >= 2 ? "p-ok" : "p-warn"}" title="independent web pages (checked: returned by Tavily, number found in the page) that agree with the chosen size within 8%">${f.sources_agree}/${f.sources_checked} agree</span>`
         : `<span class="pill p-ok">1 source</span>`;
       const editable = editFacts && state.done && attemptNums().length;
       const rows = d.facts.map((f) => {

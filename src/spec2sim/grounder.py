@@ -282,6 +282,28 @@ def _agreement(e: _Extracted, fact: ObjectFact) -> tuple[int, int]:
     return len(sizes), agree
 
 
+def _verified_evidence(e: _Extracted, page_text: dict[str, str]) -> list[_Evidence]:
+    """Keep only evidence the code can check: from a page Tavily actually returned (not the search
+    summary, which is built from those same pages), one vote per page, and with the size's largest
+    value written in that page's text (as mm, cm or inches). Unchecked votes would let the extraction
+    model invent "4/4 agree"."""
+    out, seen = [], set()
+    for ev in e.evidence:
+        text = page_text.get(ev.source)
+        if not text or ev.source in seen or ev.source == e.source_url or not ev.size_mm:
+            continue
+        mx = max(ev.size_mm)
+        if mx <= 0:
+            continue
+        nums = set(re.findall(r"\d+(?:[.,]\d+)?", text))
+        forms = {f"{mx:g}", f"{mx / 10:g}", f"{mx / 10:.1f}", f"{mx / 25.4:.1f}", f"{mx / 25.4:.2f}", f"{round(mx / 25.4 * 4) / 4:g}"}
+        if not any(f.replace(".0", "") in nums or f in nums for f in forms):
+            continue
+        seen.add(ev.source)
+        out.append(ev)
+    return out
+
+
 def _consensus(e: _Extracted) -> _Extracted:
     """With three or more sizes from the web, use the median one: a single outlier page (a farm
     guide's 8.9 cm 'apple') then can't decide whether a task is refused."""
@@ -388,6 +410,7 @@ def physics_facts(materials: list[str], budget: int) -> tuple[list[MaterialFact]
 def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[CallStat]]:
     """Returns facts, the source list for the UI, Tavily stats, and LLM call stats."""
     blocks, sources, images, cached, t0 = [], [], [], 0, time.time()
+    page_text: dict[str, str] = {}  # url -> the text Tavily returned for it (to check evidence)
     search_s = 0.0
     queries = task.search_queries[:MAX_SEARCHES]
     for q in queries:
@@ -404,6 +427,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
             lines.append(f"Summary: {res['answer']}")
         for r in res.get("results", []):
             sources.append(Source(title=r.get("title", r["url"])[:90], url=r["url"]))
+            page_text[r["url"]] = page_text.get(r["url"], "") + " " + r.get("content", "")[:600]
             lines.append(f"- [{r.get('title', '')}]({r['url']}): {r.get('content', '')[:600]}")
         blocks.append("\n".join(lines))
         for im in res.get("images", []) or []:
@@ -424,6 +448,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     corpus = _norm("\n".join(blocks))
     returned = {src.url for src in sources}
     for e in ex.facts:
+        e = e.model_copy(update={"evidence": _verified_evidence(e, page_text)})
         if e.quote.strip() and not verified(e.quote, corpus):  # invented citation: keep numbers, drop the source
             e = e.model_copy(update={"quote": "", "evidence": [], "note": "estimate (quote not found in sources)"})
         if e.source_url and e.source_url not in returned:  # a URL Tavily never returned: drop it
