@@ -1,38 +1,67 @@
+<div align="center">
+
 # Spec-to-Sim
 
-> **Describe a robot task in plain English. Get a checked MuJoCo simulation, a robustness score and a test harness for your own policy. When a plan fails, Nemotron Super proposes three fixes and the simulator picks the one that works.**
+### One sentence in. A checked robot simulation out.
 
-![Spec-to-Sim: the step timeline on the left, a 3D replay of a Franka arm that has sorted an apple and a lime into a basket and a soda can into a recycling bin on the right, with green goal checks over each object](docs/img/ui.jpg)
+Type a robot task in plain English. Spec-to-Sim builds a MuJoCo scene from real-world facts found on the web, runs a Franka arm through it, and checks every goal in code. When a plan fails, NVIDIA Nemotron proposes three fixes and the simulator picks the one that works. Every solved task comes with a robustness score, training data, and a test harness for your own robot policy.
 
-**Track:** Physical AI · **Built for:** Nebius x NVIDIA Global AI Hackathon 2026
-**Live demo:** https://austintransformer-spec-to-sim.hf.space (Hugging Face Space; recorded runs replay instantly, live runs take about a minute) · **Video:** https://youtu.be/HfrEUVrve4M
+**[Live demo](https://austintransformer-spec-to-sim.hf.space)** · **[Demo video](https://youtu.be/HfrEUVrve4M)** · **[Evaluation](docs/eval.md)** · **[How it works](#how-it-works)**
+
+[![Physical AI track](https://img.shields.io/badge/track-Physical%20AI-2c5d8f)](#)
+[![NVIDIA Nemotron](https://img.shields.io/badge/models-NVIDIA%20Nemotron-76b900)](#how-we-use-nvidia-nemotron-on-nebius-token-factory)
+[![Nebius Token Factory](https://img.shields.io/badge/inference-Nebius%20Token%20Factory-1a1a1a)](#how-we-use-nvidia-nemotron-on-nebius-token-factory)
+[![Tavily](https://img.shields.io/badge/web%20grounding-Tavily-f2c14e)](#how-we-use-tavily-the-reality-check)
+[![MuJoCo](https://img.shields.io/badge/physics-MuJoCo-4fc2b8)](https://mujoco.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+<a href="https://youtu.be/HfrEUVrve4M"><img src="https://img.youtube.com/vi/HfrEUVrve4M/maxresdefault.jpg" alt="Watch the Spec-to-Sim demo video (2:54)" width="720"></a>
+
+<sub>Watch the 3-minute demo · Built for the Nebius x NVIDIA Global AI Hackathon 2026, Physical AI track</sub>
+
+</div>
 
 ---
 
-## What it does
-
-You type: *"Open the drawer, put the Rubik's cube inside, and close it."*
-
-1. **Plan:** Nemotron 3 Super turns the sentence into a task spec: objects, and success goals that code can check (`inside(rubiks_cube, drawer)`, `closed(drawer)`).
-2. **Ground:** Tavily searches the web for each object's real size and mass, and Nemotron Nano extracts the numbers with their source links. Code converts units and rejects implausible values.
-3. **Build:** Nemotron 3 Super places the objects and writes the plan as skills (`pick`, `place_on`, `drop_into`, `push`; waypoints only for drawers). Code turns skills into waypoints from the real sizes and where things are. The model never writes code or robot XML.
-4. **Simulate:** MuJoCo runs the Franka Panda (from MuJoCo Menagerie) through the plan. **Code checks every goal** against the final simulator state.
-5. **Watch:** Nemotron 3.5 Super VL checks a render of the scene before the robot moves, and if a goal fails it looks at 8 frames from the run plus the measured failures and explains what went wrong.
-6. **Repair:** Super writes 3 repair candidates in parallel, seeing every earlier attempt. Each is tested in the simulator (physics only, free) and the best one runs next. At most 4 attempts.
-7. **Stress-test:** a successful plan is re-run 16 times, physics only. Each time every loose object starts up to 4 cm away and turned up to 30°, weighs ±20 %, all objects share one ±30 % friction scale, and the robot sees each object up to 0.5 cm from where it really is (like a camera's error). The result is a robustness score: plans with no margin for error score low.
-8. **Generate training data:** one click turns the solved task into 20 successful demonstrations with varied starts, saved in the **LeRobot v2.1 dataset format** (Parquet + MP4, a format NVIDIA GR00T post-training also reads). The idea follows Isaac Lab Mimic: multiply demonstrations and keep the successful ones. We checked the files load with Hugging Face's `lerobot` (v0.3.3). They come from our scripted top-down controller with the grasp assist (see limitations), so treat them as a starting point, not finished training data; item 10 shows what a small policy learns from them.
-
-9. **Test your own policy:** every scene export includes `spec2sim_env.py` (MuJoCo + NumPy only: `reset(seed)` with the stress test's randomization, `step(action)`, `success()` with the same goal checks and tolerances) and `evaluate.py`, so a team can score any `act(obs)` policy on randomized versions of the scene: `python evaluate.py --policy my_policy.py --episodes 50`.
-10. **Policy report card:** `scripts/train_policy.py` trains a small neural policy (an ensemble of five NumPy MLPs, ~40 s on a laptop CPU) on 100 generated demos and tests it on the same 16 perturbed variants as the scripted plan. It closes the loop from sentence to scene to data to policy to a measured weakness: the learned policy matches the plan on a simple stack (16/16) but drops to 4/16 placing a tennis ball on a cube (it grips about 1 cm high, so the ball rolls off) and 2/16 on a three-step task. These are behaviour-cloning results in our own simulator, with the grasp assist, not a robot result, and the comparison favours the learned policy slightly: it sees true object poses while the scripted plan gets the stress test's 0.5 cm sensing error. One training seed, 16 trials (4/16 has a 95 % CI of roughly 10–50 %).
-
-Every step streams live to the web app with the model that ran it, its time, tokens and cost, and a cascade strip lights up each stage as it runs. Each attempt replays **in 3D in the browser**, with the code's ✓/✗ verdict drawn on each object. **Before / after** shows the first failed attempt beside the repaired one on one clock and camera (or as a red "ghost"). **Move objects** lets you drag things to new spots and re-run the same plan, and **Edit facts** lets you correct any object's size, mass or friction and re-run: physics only, no model cost, so you can try to break it. **Export scene** downloads the generated scene (MuJoCo XML), the success checks and the motion plan, ready to test a robot policy against.
+## At a glance
 
 | | |
 |---|---|
-![Before / after: the failed attempt with the tennis ball beside the cube and a red label, next to the repaired attempt with the ball on the cube and a green label](docs/img/before_after.jpg)
+| **42 of 45** runs pass on 15 held-out prompts | **11 of 11** development prompts pass on the current code |
+| **$0.004** median model cost per task | **38 s** median time per task |
+| **3 Super repairs + a simulator** matched escalating to the 550B Ultra, at lower cost | **16** perturbed re-runs score every solved plan |
 
-| ![A failed attempt: the tennis ball rolled off the Rubik's cube, with a red label reading tennis_ball on rubiks_cube, 9.3 cm off](docs/img/failed_attempt.jpg) | ![A Franka arm placing a tennis ball and a Rubik's cube into a pulled-out wooden drawer](docs/img/drawer.jpg) |
-| **A real failure, measured by code.** The ball was let go 1.6 cm above the cube and rolled off. The Critic explained why, and Super's repair succeeded on attempt 2. | **Beyond pick-and-place.** Grip a drawer handle, pull it open, put two objects in, push it shut. Inspired by Isaac Lab's Franka drawer task, but simpler: a top-down grasp of a handle bar on a slide joint, with the cabinet placed by code. |
+Numbers, method and caveats: [docs/eval.md](docs/eval.md). Pass or fail is always decided by code, never by a model.
+
+![The Spec-to-Sim app: on the left, the real-world facts Tavily found for a soda can and a Rubik's cube, with the model's own guess under each web value and "4/4 agree" evidence; on the right, the outcome "Attempt 1 failed, diagnosed, repaired, passed on attempt 2", and a before/after 3D replay: the can lying on its side on the left, standing upright on the right](docs/img/hero_end.jpg)
+
+## How it works
+
+You type: *"Put the soda can to the left of the Rubik's cube and keep it upright."*
+
+1. **Plan:** Nemotron 3 Super turns the sentence into objects and goals that code can check (`left_of(soda_can, rubiks_cube)`, `upright(soda_can)`).
+2. **Ground:** Tavily searches the web for each object's real size and mass (reading full pages with `/extract` when snippets aren't enough), Nemotron Nano extracts the numbers with their sources, and code cross-checks them. Friction and bounciness come from engineering tables; the gripper's opening from Franka's datasheet. Impossible tasks are refused before anything is built.
+3. **Build:** Super places the objects and writes the plan as skills (`pick`, `place_on`, `drop_into`, `push`). Our own controller turns skills into motion from the real sizes. The model never writes code or robot XML.
+4. **Simulate and check:** MuJoCo runs the Franka Panda (from MuJoCo Menagerie). **Code checks every goal** against the final state.
+5. **Repair:** if a goal fails, Nemotron 3.5 Super VL explains what went wrong from the frames, Super writes **three repair candidates in parallel**, the simulator tests each one in seconds, and the sturdiest runs next. At most 4 attempts.
+6. **Stress-test:** a successful plan is re-run 16 times: objects moved up to 4 cm and turned up to 30°, ±20 % mass, ±30 % friction, and the robot's view up to 0.5 cm off. Plans with no margin score low.
+7. **Use it:** export the scene with a policy test harness, or generate training data.
+
+| The repair loop, live | Real-world facts from Tavily |
+|---|---|
+| ![Attempt 1 failed: the red block landed 0.4 cm in front of the blue one instead of 3 cm. The Critic explains why, and three repair candidates are tested in the simulator: two pass all goals (3/4 and 4/4 perturbed re-runs), one is an invalid scene; the sturdiest runs](docs/img/repair.jpg) | ![Real-world facts card: the soda can's size from a packaging spec with 4/4 sources agreeing, the model's own guess shown underneath, and the web's 15 g mass rejected as impossible for its size](docs/img/facts_soda.jpg) |
+| **Three fixes, the simulator is the judge.** Each candidate is run in physics before it is chosen. | **Every number has a source.** Votes count only if the page was returned by Tavily and contains the number. |
+| ![Stress test: 15 of 16 perturbed re-runs pass, shown as 16 green and red tiles](docs/img/stress.jpg) | ![Refused before building: a grapefruit 8.2 cm wide against the Franka gripper's 8 cm opening, drawn as two bars](docs/img/refused.jpg) |
+| **Robust, or lucky?** One tile per perturbed re-run; hover a red one to see why it failed. | **Says no when physics says no.** Sizes from the web against the gripper's datasheet, before any money is spent. |
+
+**What you get from a solved task**
+- **A policy test harness:** every scene export includes `spec2sim_env.py` (MuJoCo + NumPy only: `reset(seed)` with the stress test's randomization, `step(action)`, `success()` with the same goal checks) and `evaluate.py`, so a team can score any `act(obs)` policy: `python evaluate.py --policy my_policy.py --episodes 50`.
+- **Training data:** one click gives 20 successful demonstrations with varied starts in the **LeRobot v2.1 format** (Parquet + MP4, a format NVIDIA GR00T post-training also reads), checked to load with Hugging Face's `lerobot` (v0.3.3). They come from our scripted top-down controller with the grasp assist (see limitations), so treat them as a starting point.
+- **A policy report card:** `scripts/train_policy.py` trains a small neural policy (five NumPy MLPs, ~40 s on a laptop CPU) on 100 generated demos and tests it on the same 16 variants as the scripted plan. It matches the plan on a simple stack (16/16) but drops to 4/16 placing a tennis ball on a cube (it grips about 1 cm high, so the ball rolls off). That is what a test is for. These are behaviour-cloning results in our own simulator, with the grasp assist; the learned policy sees true object poses while the scripted plan gets 0.5 cm sensing error; one training seed, 16 trials (4/16 has a 95 % CI of roughly 10–50 %).
+
+![Policy report card: scripted plan 16/16, learned policy 4/16 on the same perturbed variants](docs/img/policy.jpg)
+
+**In the app,** every step streams live with the model that ran it, its time, tokens and cost. Each attempt replays **in 3D in the browser** with the code's ✓/✗ verdict on each object; **Before / after** puts the failed attempt beside the repaired one; **Move objects** and **Edit facts** let you drag things or correct a size, mass or friction and re-run the same plan (physics only, no model cost), so you can try to break it.
 
 ## Why it matters
 
@@ -52,11 +81,12 @@ Robotics teams spend days hand-building simulation scenes to test a single skill
 | Articulated objects | "Open the drawer, put the Rubik's cube inside, and close it" |
 | Contact-rich, no grasp | "Knock over the tower of three wooden toy blocks" |
 | Training data | Any solved task → 20 successful demonstrations in LeRobot format (fruit sorting: 3,340 frames in 77 s) |
+| Your own policy | Any export → `evaluate.py` scores your `act(obs)` on randomized versions of the scene |
 | Says no when physics says no | An object wider than the gripper's 7.8 cm opening stops the run before any money is spent on repairs |
 
 ### Evaluation
 
-Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3 runs per prompt, success decided by code. Both evals predate the stricter grasp and "inside" checks added on Oct 29 and have not been re-run since.
+Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3 runs per prompt, success decided by code. Both 104-run evals predate the stricter grasp and "inside" checks added on Oct 29; the reasoning ablation below ran on the current code (11/11 with reasoning on).
 
 | Suite | Success | First try | Model cost per task |
 |---|---|---|---|
