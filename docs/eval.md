@@ -8,6 +8,22 @@ decided only by the code-checked goal predicates (`src/spec2sim/sim/metrics.py`)
 uv run python scripts/eval.py --reps 3 --no-critic-reps 1 --workers 3
 ```
 
+## Reasoning ablation (Oct 29, 2026, commit `1520e6d`, current code)
+
+The 11 development prompts, 1 run each, with Nemotron Super's reasoning on vs off for the Planner,
+Builder and repairs (`SUPER_THINKING`; the vision and extraction calls always run with it off).
+Results in `eval/20261029-135932/` (on) and `eval/20261029-140320/` (off). This is also the first run
+on the code with the stricter grasp and "inside" checks.
+
+| Super reasoning | Success | First try | Median cost per task | Mean cost | Median time |
+|---|---|---|---|---|---|
+| On | **11/11** | 9/11 | $0.0055 | $0.0086 | 59 s |
+| Off | 6/11 | 1/11 | $0.0108 | $0.0134 | 43 s |
+
+Turning reasoning off makes each call faster but the plans fail far more often, and the extra repair
+rounds make tasks about twice as expensive. One run per prompt, so treat the size of the gap as rough;
+its direction is not in doubt.
+
 ## Round 2: the current pipeline (Oct 28, 2026, commit `5bb3636`)
 
 After the second judge round the pipeline changed (commit `b367007`): the Builder writes skills
