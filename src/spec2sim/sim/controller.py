@@ -43,7 +43,9 @@ def _rz(yaw: float) -> np.ndarray:
 
 
 class Controller:
-    def __init__(self, scene: Scene, data: mujoco.MjData):
+    def __init__(self, scene: Scene, data: mujoco.MjData, assist: bool = True):
+        """assist=False: no weld, the fingers must hold objects by friction alone (measured, not demoed)."""
+        self.assist = assist
         self.s, self.m, self.d = scene, scene.model, data
         self.scratch = mujoco.MjData(self.m)
         self.tcp = self.m.site("tcp").id
@@ -197,14 +199,15 @@ class Controller:
             best = name
             break
         if best is not None:
-            self._weld(best, True)
+            if self.assist:
+                self._weld(best, True)
             self.held = best
             return best, f"grasped {best} (fingers {gap * 100:.1f} cm apart)"
         return None, reason or f"gripper closed on nothing (tcp at {np.round(tcp, 3).tolist()})"
 
     def release(self) -> str | None:
         name, self.held = self.held, None
-        if name:
+        if name and self.assist:
             self._weld(name, False)
         return name
 

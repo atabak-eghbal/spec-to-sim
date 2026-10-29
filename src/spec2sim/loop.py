@@ -214,7 +214,12 @@ def fit_furniture(b) -> tuple[object, list[str]]:
 
 @traceable(name="stress_test", run_type="tool")
 def _traced_stress(b, goals, trials: int, physics: dict) -> dict:
-    return runner.stress_test(b, goals, trials=trials, physics=physics)
+    """Stress test with the grasp assist (the main score), plus the same seeds without it: how often
+    the fingers alone, by friction, would have held the objects (reported, not hidden)."""
+    st = runner.stress_test(b, goals, trials=trials, physics=physics)
+    raw = runner.stress_test(b, goals, trials=trials, physics=physics, assist=False)
+    st["no_assist"] = {"passed": raw["passed"], "trials": raw["trials"]}
+    return st
 
 
 @traceable(name="runner", run_type="tool")

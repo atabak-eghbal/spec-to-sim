@@ -46,10 +46,12 @@ REACH_X = (0.3, 0.7)
 REACH_Y = (-0.4, 0.4)
 REACH_R = 0.78
 HOME_Q = (0, 0, 0, -1.57079, 0, 1.57079, -0.7853)
+TCP_OFFSET = 0.1034
 VARIATIONS = {"pos_jitter_m": 0.04, "yaw_jitter_rad": 0.52, "mass_scale": 0.2, "friction_scale": 0.3}
 # END GENERATED CONSTANTS
 
-CTRL_DT = 0.1  # seconds per env.step
+CTRL_DT = 0.1  # seconds per env.step (one policy decision)
+TICK = 0.01  # internally the joint target moves smoothly toward the new action every 10 ms, as in Spec-to-Sim
 GRAV_COMP_DT = 0.01  # gravity compensation is refreshed this often inside a step (as in the runner)
 GRIP_OPEN, GRIP_CLOSED = 255.0, 0.0
 SIDES = {"left_of": (1, 1), "right_of": (1, -1), "in_front_of": (0, 1), "behind": (0, -1)}
@@ -125,6 +127,7 @@ class Spec2SimEnv:
         self.arm_qpos = np.array([j.qposadr[0] for j in joints])
         self.arm_dof = np.array([j.dofadr[0] for j in joints])
         self.finger_qpos = [int(m.joint(f"finger_joint{i}").qposadr[0]) for i in (1, 2)]
+        self.finger_dof = [int(m.joint(f"finger_joint{i}").dofadr[0]) for i in (1, 2)]
         self.hand = m.body("hand").id
         self.n_sub = max(1, round(GRAV_COMP_DT / m.opt.timestep))
         self.drawer_qpos = {n: int(m.joint(f"{PREFIX}{n}/slide").qposadr[0])
@@ -198,7 +201,7 @@ class Spec2SimEnv:
             b = m.body(OBJ + n).id
             m.body_mass[b], m.body_inertia[b] = self.base_mass[b] * k, self.base_inertia[b] * k
         m.geom_friction[self.obj_geoms, 0] = self.base_fric[self.obj_geoms] * var["_friction"]
-        self.held = None
+        self.held, self._tried = None, False
         self.action = np.array([*HOME_Q, GRIP_OPEN])
         d.ctrl[:8] = self.action
         mujoco.mj_forward(m, d)
@@ -210,28 +213,40 @@ class Spec2SimEnv:
                                           "mass_x": round(var[n][3], 2)} for n in self.loose}}
         return self.obs()
 
+    def tcp_pos(self) -> np.ndarray:
+        """Tool point: the center between the fingertips (TCP_OFFSET below the hand flange)."""
+        return self.d.xpos[self.hand] + self.d.xmat[self.hand].reshape(3, 3)[:, 2] * TCP_OFFSET
+
     def obs(self) -> dict:
         d = self.d
         return {"time": float(d.time), "arm_qpos": d.qpos[self.arm_qpos].copy(),
-                "finger_qpos": d.qpos[self.finger_qpos].copy(),
+                "finger_qpos": d.qpos[self.finger_qpos].copy(), "tcp_pos": self.tcp_pos(),
+                "drawers": {n: float(d.qpos[q]) for n, q in self.drawer_qpos.items()},
                 "objects": {n: {"pos": d.body(OBJ + n).xpos.copy(), "quat": d.body(OBJ + n).xquat.copy()}
                             for n in self.loose}}
 
     def step(self, action) -> dict:
         """action: 7 arm joint position targets (rad) + gripper (0 closed .. 255 open). Advances 0.1 s."""
         a = np.asarray(action, dtype=float).reshape(8)
-        self.action = a
+        prev, self.action = self.action.copy(), a
         m, d = self.m, self.d
-        d.ctrl[:8] = a
-        for _ in range(max(1, round(CTRL_DT / (self.n_sub * m.opt.timestep)))):
+        ticks = max(1, round(CTRL_DT / TICK))
+        sub = max(1, round(TICK / m.opt.timestep))
+        for i in range(ticks):  # move the target smoothly, like a real position controller's trajectory
+            d.ctrl[:8] = prev + (a - prev) * (i + 1) / ticks
             d.qfrc_applied[self.arm_dof] = d.qfrc_bias[self.arm_dof]  # gravity compensation
-            mujoco.mj_step(m, d, nstep=self.n_sub)
+            mujoco.mj_step(m, d, nstep=sub)
         if self.grasp_assist:
-            if a[7] < 128 and self.held is None:
-                self._try_grasp()
-            elif a[7] >= 128 and self.held is not None:
-                self._weld(self.held, False)
-                self.held = None
+            if a[7] < 128 and self.held is None and not self._tried:
+                # Judge the grasp once per close, after the fingers have stopped moving (as Spec-to-Sim does).
+                if np.abs(d.qvel[self.finger_dof]).max() < 0.01:
+                    self._try_grasp()
+                    self._tried = True
+            elif a[7] >= 128:
+                self._tried = False
+                if self.held is not None:
+                    self._weld(self.held, False)
+                    self.held = None
         # Highest height each loose object has RESTED at (not held, nearly still): 'toppled' uses it.
         for n in self.loose:
             if n != self.held and np.linalg.norm(d.body(OBJ + n).cvel[3:]) < 0.02:
@@ -267,11 +282,16 @@ class Spec2SimEnv:
                 gid = m.geom(f"{PREFIX}{n}/handle").id
                 body = int(m.geom_bodyid[gid])
                 width = float(np.sum(np.abs(d.geom_xmat[gid].reshape(3, 3).T @ axis) * 2 * m.geom_size[gid]))
+                center, top = d.geom_xpos[gid], d.geom_xpos[gid][2] + m.geom_size[gid][2]
             else:
                 b = d.body(OBJ + n)
                 body, width = b.id, self._width_across(o, b.xmat.reshape(3, 3), axis)
+                center, top = b.xpos, b.xpos[2] + o.size[2] / 2
             sides = touch.get(body, set())
             if not sides or width > MAX_GRASP_WIDTH:
+                continue
+            tcp = self.tcp_pos()  # the object must be between the fingers, not under a fingertip
+            if abs(float((center - tcp) @ axis)) > gap / 2 + 0.003 or tcp[2] > top - 0.004:
                 continue
             if len(sides) < 2 and gap - width > ONE_PAD_SLACK:
                 continue

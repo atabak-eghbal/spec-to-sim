@@ -30,7 +30,7 @@ def _smoothstep(x: float) -> float:
 
 class _Sim:
     def __init__(self, build: Build, out_dir: Path | None, allowed: set[str] | None = None,
-                 tweak=None, physics: dict | None = None):
+                 tweak=None, physics: dict | None = None, assist: bool = True):
         """out_dir=None: physics only, nothing rendered or recorded (used by the stress test).
         tweak(model): optional hook to perturb the compiled model (e.g. friction)."""
         self.scene = build_scene(build.objects, allowed, physics)
@@ -42,7 +42,7 @@ class _Sim:
         if tweak:
             tweak(self.m)
         mujoco.mj_forward(self.m, self.d)
-        self.ctl = Controller(self.scene, self.d)
+        self.ctl = Controller(self.scene, self.d, assist)
         self.rec = Recorder(self.m, out_dir) if out_dir is not None else None
         self.events: list[str] = []
         self.n_sub = round(CTRL_DT / self.m.opt.timestep)
@@ -356,7 +356,8 @@ def perturb(build: Build, rng, pos_jitter: float = STRESS["pos_jitter"], yaw_jit
 def stress_test(build: Build, goals: list[Goal], trials: int = 16, seed: int = 0,
                 pos_jitter: float = STRESS["pos_jitter"], yaw_jitter: float = STRESS["yaw_jitter"],
                 mass_scale: float = STRESS["mass_scale"], friction_scale: float = STRESS["friction_scale"],
-                sense_error: float = STRESS["sense_error"], physics: dict | None = None) -> dict:
+                sense_error: float = STRESS["sense_error"], physics: dict | None = None,
+                assist: bool = True) -> dict:
     """Re-run a plan under random perturbations, physics only (no rendering, no model calls).
 
     Each trial: every loose object starts up to 4 cm away and turned up to 30 degrees, weighs
@@ -374,7 +375,7 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 16, seed: int = 0
         b, tweak, change = perturb(build, rng, pos_jitter, yaw_jitter, mass_scale, friction_scale)
         fk = change.pop("_friction_x")
         try:
-            sim = _Sim(b, None, tweak=tweak, physics=physics)
+            sim = _Sim(b, None, tweak=tweak, physics=physics, assist=assist)
         except SceneError:
             redrawn += 1
             continue  # nudges made two objects overlap or left the workspace: draw again
@@ -390,7 +391,7 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 16, seed: int = 0
         rows.append({"ok": ok, "error": err, "friction_x": fk, "objects": change,
                      "failed": [r.detail for r in res if not r.ok]})
     n = len(rows)
-    return {"trials": n, "passed": sum(r["ok"] for r in rows), "redrawn": redrawn, "seed": seed,
+    return {"trials": n, "passed": sum(r["ok"] for r in rows), "redrawn": redrawn, "seed": seed, "assist": assist,
             "per_goal": [{"goal": g.model_dump(exclude_none=True), "passed": goal_pass[i]} for i, g in enumerate(goals)],
             "perturbation": {"position_cm": pos_jitter * 100, "yaw_deg": round(float(np.degrees(yaw_jitter)), 1),
                              "mass_pct": mass_scale * 100, "friction_pct": friction_scale * 100,

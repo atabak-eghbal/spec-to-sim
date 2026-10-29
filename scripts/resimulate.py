@@ -57,6 +57,8 @@ def resimulate(run_dir: Path) -> list[str]:
     end["success"] = final is not None
     if final is not None and config.STRESS_TRIALS > 0:
         st = runner.stress_test(builds[final], goals, trials=config.STRESS_TRIALS, physics=physics)
+        raw = runner.stress_test(builds[final], goals, trials=config.STRESS_TRIALS, physics=physics, assist=False)
+        st["no_assist"] = {"passed": raw["passed"], "trials": raw["trials"]}
         first = min(builds)
         if first != final:
             fp = runner.stress_test(builds[first], goals, trials=config.STRESS_TRIALS, physics=physics)
@@ -71,7 +73,7 @@ def resimulate(run_dir: Path) -> list[str]:
                            "the Critic's text, are from the original run."})
     f.write_text("".join(json.dumps(e) + "\n" for e in events))
     s = next((e["data"] for e in events if e.get("step") == "stress" and e.get("status") == "done"), None)
-    rob = f"stress {s['passed']}/{s['trials']}" + (f" (first plan {s['first_plan']['passed']}/{s['first_plan']['trials']})"
+    rob = f"stress {s['passed']}/{s['trials']}, no assist {s['no_assist']['passed']}/{s['no_assist']['trials']}" + (f" (first plan {s['first_plan']['passed']}/{s['first_plan']['trials']})"
                                                    if s and "first_plan" in s else "") if s else "no stress test"
     print(f"{run_dir.name}: {'PASS' if final else 'FAIL'}, {rob}" + (f"  CHANGED: {changed}" if changed else ""), flush=True)
     return changed

@@ -421,8 +421,9 @@ function stepBody(s) {
       const pv = d.perturbation;
       const seen = pv.sensing_cm ? ` The robot sees each object up to ${pv.sensing_cm} cm from where it really is, like a camera's error.` : "";
       const fp = d.first_plan ? ` The first plan (attempt ${d.first_plan.attempt}) passed ${d.first_plan.passed}/${d.first_plan.trials} of the same test.` : "";
+      const na = d.no_assist ? `<p class="mono" style="font-size:.78rem">Without the grasp assist (the fingers hold objects by friction alone, no weld): <b>${d.no_assist.passed}/${d.no_assist.trials}</b>.</p>` : "";
       return `${tiles(d)}<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction.${seen}${fp} Physics only, no model calls (${d.seconds} s).</p>
-        <div class="robust"><span style="width:${(100 * pct).toFixed(0)}%"></span></div>
+        <div class="robust"><span style="width:${(100 * pct).toFixed(0)}%"></span></div>${na}
         ${d.per_goal.length > 1 ? `<p class="mono" style="font-size:.78rem">${d.per_goal.map((p) => esc(`${p.goal.obj} ${p.goal.type} ${p.goal.target || ""}`.trim()) + `: ${p.passed}/${d.trials}`).join("<br>")}</p>` : ""}`;
     }
     case "planner":

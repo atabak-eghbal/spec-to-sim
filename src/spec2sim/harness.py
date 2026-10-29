@@ -33,7 +33,7 @@ def _constants() -> str:
          "TOPPLE_TILT": metrics.TOPPLE_TILT, "BIN_WALL": scene.BIN_WALL, "OPENED_MIN": scene.OPENED_MIN,
          "CLOSED_MAX": scene.CLOSED_MAX, "MAX_GRASP_WIDTH": MAX_GRASP_WIDTH, "ONE_PAD_SLACK": ONE_PAD_SLACK,
          "MIN_FINGER_GAP": MIN_FINGER_GAP, "REACH_X": REACH_X, "REACH_Y": REACH_Y, "REACH_R": REACH_R,
-         "HOME_Q": tuple(float(x) for x in HOME_Q), "VARIATIONS": variations()}
+         "HOME_Q": tuple(float(x) for x in HOME_Q), "TCP_OFFSET": scene.TCP_OFFSET, "VARIATIONS": variations()}
     return "".join(f"{k} = {v!r}\n" for k, v in c.items())
 
 
