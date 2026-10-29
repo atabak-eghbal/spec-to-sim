@@ -19,6 +19,7 @@ from spec2sim.sim.scene import BIN_WALL, OBJ_PREFIX, SceneError, build_scene
 
 CTRL_DT = 0.01  # seconds between IK/control updates
 SETTLE_START, SETTLE_END = 0.3, 0.8
+GRIP_SETTLE = 0.15  # s after a close before the grasp is judged
 MAX_SIM_TIME = 32.0  # room for 4-5 pick-and-place moves
 
 
@@ -96,6 +97,7 @@ class _Sim:
                 ctl.grip = start + (end - start) * _smoothstep((k + 1) / steps)
                 self.tick()
             if a.op == "close":
+                self.hold(GRIP_SETTLE)  # let the fingers finish closing before judging the grasp
                 got, msg = ctl.try_grasp()
                 if got and self.scene.objects[got].shape == "drawer":
                     msg = f"grasped {got} handle"
@@ -230,8 +232,11 @@ def _execute(sim: _Sim, build: Build) -> str | None:
     return None
 
 
-def perturb(build: Build, rng, pos_jitter: float = 0.015, yaw_jitter: float = 0.15,
-            mass_scale: float = 0.2, friction_scale: float = 0.3):
+STRESS = {"pos_jitter": 0.04, "yaw_jitter": 0.52, "mass_scale": 0.2, "friction_scale": 0.3, "sense_error": 0.005}
+
+
+def perturb(build: Build, rng, pos_jitter: float = STRESS["pos_jitter"], yaw_jitter: float = STRESS["yaw_jitter"],
+            mass_scale: float = STRESS["mass_scale"], friction_scale: float = STRESS["friction_scale"]):
     """One random variant of a build: loose objects nudged, turned, heavier/lighter; one friction
     scale for all objects. Furniture stays put. Returns (build, model tweak, description)."""
     objs, change = [], {}
@@ -257,27 +262,35 @@ def perturb(build: Build, rng, pos_jitter: float = 0.015, yaw_jitter: float = 0.
     return build.model_copy(update={"objects": objs}), tweak, change
 
 
-def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0,
-                pos_jitter: float = 0.015, yaw_jitter: float = 0.15, mass_scale: float = 0.2,
-                friction_scale: float = 0.3, physics: dict | None = None) -> dict:
+def stress_test(build: Build, goals: list[Goal], trials: int = 16, seed: int = 0,
+                pos_jitter: float = STRESS["pos_jitter"], yaw_jitter: float = STRESS["yaw_jitter"],
+                mass_scale: float = STRESS["mass_scale"], friction_scale: float = STRESS["friction_scale"],
+                sense_error: float = STRESS["sense_error"], physics: dict | None = None) -> dict:
     """Re-run a plan under random perturbations, physics only (no rendering, no model calls).
 
-    Like Isaac Lab-Arena's sensitivity analysis: does the plan still work if each object starts up
-    to 1.5 cm away and turned up to ~9 degrees, weighs +-20 %, and has +-30 % friction? Plan steps
-    are relative to objects' *current* positions, so a good plan adapts to the jitter.
+    Each trial: every loose object starts up to 4 cm away and turned up to 30 degrees, weighs
+    +-20 %, all objects get one +-30 % friction scale, and the robot sees each object up to 0.5 cm
+    from where it really is (like a camera's error), so a grasp with no margin fails. Plan steps
+    are relative to where the robot sees objects, so a good plan adapts to the nudges.
+    Variants where the nudges make objects overlap are redrawn and counted in 'redrawn'.
     """
     rng = np.random.default_rng(seed)
     rows, goal_pass = [], {i: 0 for i in range(len(goals))}
     t0 = time.time()
-    attempts = 0
-    while len(rows) < trials and attempts < trials * 3:
+    attempts = redrawn = 0
+    while len(rows) < trials and attempts < trials * 6:
         attempts += 1
         b, tweak, change = perturb(build, rng, pos_jitter, yaw_jitter, mass_scale, friction_scale)
         fk = change.pop("_friction_x")
         try:
             sim = _Sim(b, None, tweak=tweak, physics=physics)
         except SceneError:
-            continue  # jitter made two objects overlap: draw again
+            redrawn += 1
+            continue  # nudges made two objects overlap or left the workspace: draw again
+        for name in change:
+            err = np.append(rng.uniform(-sense_error, sense_error, 2), 0.0)
+            sim.ctl.sense_error[name] = err
+            change[name]["seen_off_cm"] = round(float(np.linalg.norm(err)) * 100, 1)
         err = _execute(sim, b)
         res = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
         ok = err is None and all(r.ok for r in res)
@@ -286,8 +299,9 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 20, seed: int = 0
         rows.append({"ok": ok, "error": err, "friction_x": fk, "objects": change,
                      "failed": [r.detail for r in res if not r.ok]})
     n = len(rows)
-    return {"trials": n, "passed": sum(r["ok"] for r in rows),
+    return {"trials": n, "passed": sum(r["ok"] for r in rows), "redrawn": redrawn, "seed": seed,
             "per_goal": [{"goal": g.model_dump(exclude_none=True), "passed": goal_pass[i]} for i, g in enumerate(goals)],
             "perturbation": {"position_cm": pos_jitter * 100, "yaw_deg": round(float(np.degrees(yaw_jitter)), 1),
-                             "mass_pct": mass_scale * 100, "friction_pct": friction_scale * 100},
+                             "mass_pct": mass_scale * 100, "friction_pct": friction_scale * 100,
+                             "sensing_cm": sense_error * 100},
             "rows": rows, "seconds": round(time.time() - t0, 1)}

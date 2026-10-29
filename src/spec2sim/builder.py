@@ -31,7 +31,7 @@ footprint must be inside the workspace: center x >= {WORKSPACE['x'][0]} + size_x
 center x <= {WORKSPACE['x'][1]} - size_x/2, |center y| <= {WORKSPACE['y'][1]} - size_y/2.
 
 GRIPPER: always points straight down. The controller tracks the tool point (TCP) = the center
-between the fingertips. Fingers open to 8 cm total: an object can only be grasped if its width
+between the fingertips. Fingers open 8 cm total (7.8 cm usable): an object can only be grasped if its width
 across the fingers is <= 7.8 cm. `yaw` (radians) rotates the gripper about z; yaw=0 closes the
 fingers along the world x axis (toward/away from the robot), yaw=1.5708 along y.
 
@@ -47,7 +47,9 @@ OBJECTS MAY START STACKED (e.g. a tower to knock over): pos z = (height of what 
 ACTIONS (executed in order):
 - {{"op":"move_to","object":NAME,"offset":[dx,dy,dz]}} move TCP to NAME's CURRENT center + offset
 - {{"op":"move_to","xyz":[x,y,z]}}  move TCP to a world point
-- {{"op":"close"}} close gripper; if the TCP is inside/within 2 cm of an object that fits, it is grasped
+- {{"op":"close"}} close gripper; the object is grasped only if it is BETWEEN the fingers (both finger
+  pads touch it): put the TCP at the object's center height, centered on it. Closing above or beside
+  an object grasps nothing
 - {{"op":"open"}}  open gripper; the held object is released
 - {{"op":"wait"}}
 Each action has "duration" in seconds (0.3-1.5 typical). Total plan under 30 s: about 5.5 s per

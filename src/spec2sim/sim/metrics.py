@@ -29,9 +29,36 @@ def _half_h(scene: Scene, name: str) -> float:
     return scene.objects[name].size[2] / 2
 
 
+PLACED = ("on", "inside", "at")
+
+
+def _lean(scene: Scene, data: mujoco.MjData, name: str) -> float:
+    """Degrees an object leans away from resting flat: for a box, from its nearest flat face (a box
+    rolled onto another face still rests flat); for a cylinder, from standing on its end."""
+    o = scene.objects[name]
+    R = data.body(OBJ_PREFIX + name).xmat.reshape(3, 3)
+    c = np.max(np.abs(R[2, :])) if o.shape == "box" else R[2, 2]
+    return float(np.degrees(np.arccos(np.clip(c, -1, 1))))
+
+
 def check_goal(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None,
                peaks: dict[str, float] | None = None) -> GoalResult:
-    """peaks: highest resting height of each loose object during the run (for 'toppled')."""
+    """peaks: highest resting height of each loose object during the run (for 'toppled').
+
+    A placement goal (on / inside / at) also requires the object to end the way it started: a soda
+    can lying on its side in the bin was dropped, not placed."""
+    r = _check(scene, data, g, held, peaks)
+    if r.ok and g.type in PLACED and scene.objects[g.obj].shape in ("box", "cylinder"):
+        lean = _lean(scene, data, g.obj)
+        limit = TOPPLE_TILT if scene.objects[g.obj].shape == "cylinder" else UPRIGHT_MAX_TILT
+        if lean >= limit:
+            return r.model_copy(update={"ok": False, "detail": r.detail + f"; but it ended tipped over "
+                                        f"({lean:.0f} deg): placed objects must not fall over"})
+    return r
+
+
+def _check(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None,
+           peaks: dict[str, float] | None = None) -> GoalResult:
     def pos(n: str) -> np.ndarray:
         return data.body(OBJ_PREFIX + n).xpos
 

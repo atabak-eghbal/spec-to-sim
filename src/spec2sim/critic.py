@@ -16,8 +16,9 @@ SYSTEM = """You are a robotics simulation reviewer. You see a contact sheet of 8
 right, top to bottom, timestamped) from a MuJoCo simulation of a Franka Panda arm, plus the
 measured results, which are ground truth. The run FAILED. Diagnose why.
 
-Describe what the frames show (where the gripper went, whether the object moved with it, where it
-ended up), name the root cause, and propose a concrete fix to the scene or motion plan with numbers
+First look at the frames and describe what they show (where the gripper went, whether the object
+moved with it, where it ended up) before reading the numbers. Then quote the measurements, name the
+root cause, and propose a concrete fix to the scene or motion plan with numbers
 (e.g. "shift the place target 4 cm in -y", "move the mug 8 cm closer so it is reachable").
 SIM EVENTS ARE GROUND TRUTH: if an event says "grasped X", the grasp worked - do not blame the
 grasp. A release event states how high the object's bottom was above what was beneath it: more
@@ -52,3 +53,20 @@ def critique(task: TaskSpec, b: Build, result: RunResult) -> tuple[Critique, lis
     images = [result.contact_sheet_path] if result.contact_sheet_path else None
     return chat_json("critic", config.VL, SYSTEM, critic_input(task, b, result), Critique,
                      images=images, max_tokens=2000, temperature=0.1, thinking=False)
+
+
+def measured_only(result: RunResult, simulated: bool) -> Critique:
+    """A diagnosis written by code from the measurements alone, with no model call. Used when nothing
+    was simulated (the scene failed validation, so there are no frames to watch) and for the
+    no-Critic comparison in the eval (does watching the video help repair?)."""
+    failed = [g.detail for g in result.goals if not g.ok]
+    evidence = "; ".join(([result.error] if result.error else []) + failed) or "no goal results"
+    if not simulated:
+        return Critique(evidence=evidence, category="scene_error",
+                        what_happened="Nothing was simulated: the scene failed validation, so there are no frames to watch.",
+                        root_cause=result.error or "invalid scene",
+                        suggested_fix="Fix every scene problem listed in the evidence, keeping the rest of the build.")
+    return Critique(evidence=evidence, category="other",
+                    what_happened="(no video review: measured results only)",
+                    root_cause="See the failed goals and sim events in the evidence.",
+                    suggested_fix="Change the scene or plan so every failed goal passes, using the measured numbers.")

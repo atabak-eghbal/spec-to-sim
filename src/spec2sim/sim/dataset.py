@@ -29,7 +29,7 @@ from spec2sim.schemas import Build, Goal
 from spec2sim.sim.controller import GRIP_OPEN
 from spec2sim.sim.metrics import check_goal
 from spec2sim.sim.render import SHADOWS
-from spec2sim.sim.runner import _execute, _Sim, perturb
+from spec2sim.sim.runner import STRESS, _execute, _Sim, perturb
 from spec2sim.sim.scene import OBJ_PREFIX, SceneError
 
 FPS = 10
@@ -180,9 +180,11 @@ def generate(build: Build, goals: list[Goal], prompt: str, out_dir: Path, episod
     (root / "meta/episodes_stats.jsonl").write_text("".join(json.dumps(x) + "\n" for x in stat_lines))
     (root / "README.md").write_text(
         f"# Spec-to-Sim generated dataset\n\nTask: \"{prompt}\"\n\n{len(kept)} successful episodes out of {tried} valid "
-        f"perturbed variants (objects nudged up to 1.5 cm and ~9 deg, mass +-20%, friction +-30%), {FPS} fps, "
+        f"perturbed variants (objects nudged up to {STRESS['pos_jitter'] * 100:g} cm and "
+        f"{np.degrees(STRESS['yaw_jitter']):.0f} deg, mass +-20%, friction +-30%), {FPS} fps, "
         f"Franka Panda (MuJoCo Menagerie) in MuJoCo.\nLayout: LeRobot dataset format {CODEBASE} (parquet + mp4).\n"
-        "Grasping uses Spec-to-Sim's grasp assist (a weld when the closed gripper is within 2 cm of an object that fits).\n")
+        "Grasping uses Spec-to-Sim's grasp assist: once both finger pads touch an object and it holds the fingers "
+        "apart, a weld keeps it in the hand (no slip). Motions are scripted top-down waypoints, not human demos.\n")
     zpath = root.with_suffix(".zip")
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(root.rglob("*")):

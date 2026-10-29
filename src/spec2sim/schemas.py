@@ -214,12 +214,13 @@ class RunResult(BaseModel):
 
 # ---------- 5. Critic ----------
 class Critique(BaseModel):
-    # Field order matters: the model writes evidence before deciding the cause.
+    # Field order matters: the model first says what it SEES, then quotes the measurements, then decides.
+    what_happened: str = Field(description="what the frames show, frame by frame where it matters: where the gripper "
+                                           "is, whether the object moves with it, where it ends up")
     evidence: str = Field(description="quote the failed goal details and the sim events that show what went wrong")
     category: Literal[
         "missed_grasp", "dropped_object", "wrong_placement", "collision", "unreachable",
         "unstable_scene", "scene_error", "other",
     ]
-    what_happened: str = Field(description="what the frames show, in plain words")
     root_cause: str
     suggested_fix: str = Field(description="concrete change to scene or plan, with numbers")

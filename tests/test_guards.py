@@ -44,7 +44,7 @@ def test_too_wide_object_is_infeasible_before_building():
     task = _spec([Goal(type="inside", obj="apple", target="basket")])
     facts = lambda d: GroundedFacts(facts=[ObjectFact(name="apple", size=(d, d, d), mass=0.2),
                                            ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
-    assert "opens only" in infeasible(task, facts(0.083))[0]
+    assert "7.8 cm usable" in infeasible(task, facts(0.083))[0]
     assert infeasible(task, facts(0.07)) is None
 
 

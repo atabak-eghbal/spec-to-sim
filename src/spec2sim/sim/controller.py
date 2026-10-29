@@ -4,8 +4,10 @@
   the physics state is untouched. The gripper always points straight down; `yaw` spins it about z.
 - Execution: straight-line Cartesian paths with smoothstep timing, IK every control tick,
   position actuators + gravity compensation.
-- Grasp assist (documented in README): when the gripper closes within reach of an object, a weld
-  holds it to the hand until the gripper opens. Physical-only grasping proved too flaky to demo.
+- Grasp assist (documented in README): when the gripper closes ON an object - both finger pads
+  touching it and the fingers stopped open by it - a weld holds it to the hand until the gripper
+  opens. The weld only replaces grip friction (physical-only grasping proved too flaky to demo);
+  closing near an object, above it or beside it grasps nothing.
 """
 from __future__ import annotations
 
@@ -16,8 +18,8 @@ from spec2sim.sim.scene import BIN_WALL, DRAWER_PULL, DRAWER_TRAVEL, OBJ_PREFIX,
 
 HOME_Q = np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853])
 GRIP_OPEN, GRIP_CLOSED = 255.0, 0.0
-GRASP_REACH = 0.02  # tcp may be this far outside an object's half-extent and still grasp
-MAX_GRASP_WIDTH = 0.078  # Panda fingers open to 8 cm total
+MAX_GRASP_WIDTH = 0.078  # Panda fingers open 8 cm; 1 mm clearance per side
+MIN_FINGER_GAP = 0.002  # fingers must be stopped at least this far apart (closed on air = 0)
 
 
 class IKError(RuntimeError):
@@ -54,6 +56,9 @@ class Controller:
         self.q_target = HOME_Q.copy()
         self.grip = GRIP_OPEN
         self.held: str | None = None
+        # Stress test only: where the robot *thinks* each loose object is, as an offset from the truth
+        # (a camera's error). Empty = it knows exact positions.
+        self.sense_error: dict[str, np.ndarray] = {}
 
     # ---------- kinematics ----------
     def tcp_pos(self) -> np.ndarray:
@@ -117,7 +122,7 @@ class Controller:
             return np.array([front - out / 2 + 0.01, cab[1], floor])
         if anchor:
             raise IKError(f"'{name}': unknown anchor '{anchor}' (use .handle, .open, .closed or .slot)")
-        return self.d.body(OBJ_PREFIX + base).xpos.copy()
+        return self.d.body(OBJ_PREFIX + base).xpos + self.sense_error.get(base, 0.0)
 
     # ---------- per-tick control ----------
     def apply(self) -> None:
@@ -126,36 +131,61 @@ class Controller:
         self.d.qfrc_applied[self.s.arm_dof] = self.d.qfrc_bias[self.s.arm_dof]  # gravity comp
 
     # ---------- grasp assist ----------
+    def _finger_contacts(self) -> dict[int, set[str]]:
+        """Body id -> which fingers ('left', 'right') touch it right now."""
+        fingers = {self.m.body("left_finger").id: "left", self.m.body("right_finger").id: "right"}
+        touch: dict[int, set[str]] = {}
+        for c in self.d.contact[: self.d.ncon]:
+            if c.dist > 0.002:
+                continue
+            b1, b2 = self.m.geom_bodyid[c.geom1], self.m.geom_bodyid[c.geom2]
+            for f, other in ((b1, b2), (b2, b1)):
+                if f in fingers:
+                    touch.setdefault(int(other), set()).add(fingers[f])
+        return touch
+
+    def finger_gap(self) -> float:
+        return float(self.d.qpos[self.m.joint("finger_joint1").qposadr[0]]
+                     + self.d.qpos[self.m.joint("finger_joint2").qposadr[0]])
+
     def try_grasp(self) -> tuple[str | None, str]:
-        """Attach the nearest graspable object. Returns (name or None, human-readable reason)."""
+        """Attach the object the closed fingers are actually holding: both finger pads must touch it
+        and it must keep the fingers apart. Returns (name or None, human-readable reason)."""
         tcp = self.tcp_pos()
         finger_axis = self.d.xmat[self.hand].reshape(3, 3)[:, 1]  # fingers slide along hand y
-        best, best_d, reason = None, np.inf, ""
+        touch = self._finger_contacts()
+        gap = self.finger_gap()
+        best, reason = None, ""
         for name, o in self.s.objects.items():
             if o.fixed and o.shape != "drawer":
                 continue
             if o.shape == "drawer":  # only the handle bar can be grasped
                 gid = self.m.geom(f"{name}/handle").id
-                pos, R = self.d.geom_xpos[gid], self.d.geom_xmat[gid].reshape(3, 3)
-                half = self.m.geom_size[gid]
+                R, half = self.d.geom_xmat[gid].reshape(3, 3), self.m.geom_size[gid]
+                body = int(self.m.geom_bodyid[gid])
+                width = float(np.sum(np.abs(R.T @ finger_axis) * 2 * half))
             else:
                 b = self.d.body(OBJ_PREFIX + name)
-                pos, R, half = b.xpos, b.xmat.reshape(3, 3), np.array(o.size) / 2
-            local = R.T @ (tcp - pos)  # tcp in object frame
-            d = np.linalg.norm(np.maximum(np.abs(local) - half, 0))
-            if d > GRASP_REACH or d >= best_d:
+                body, width = b.id, _width_across(o, b.xmat.reshape(3, 3), finger_axis)
+            sides = touch.get(body, set())
+            if not sides:
                 continue
-            width = (float(np.sum(np.abs(R.T @ finger_axis) * 2 * half)) if o.shape == "drawer"
-                     else _width_across(o, R, finger_axis))
             if width > MAX_GRASP_WIDTH:
-                reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; "
-                          f"Panda gripper opens only {MAX_GRASP_WIDTH * 100:.1f} cm")
+                reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; the Panda gripper opens "
+                          f"8.0 cm ({MAX_GRASP_WIDTH * 100:.1f} cm usable)")
                 continue
-            best, best_d = name, d
+            if len(sides) < 2:
+                reason = f"only the {next(iter(sides))} finger touched {name}: it was not between the fingers"
+                continue
+            if gap < MIN_FINGER_GAP:
+                reason = f"fingers closed fully ({gap * 1000:.0f} mm apart): {name} slipped out"
+                continue
+            best = name
+            break
         if best is not None:
             self._weld(best, True)
             self.held = best
-            return best, f"grasped {best}"
+            return best, f"grasped {best} (fingers {gap * 100:.1f} cm apart)"
         return None, reason or f"gripper closed on nothing (tcp at {np.round(tcp, 3).tolist()})"
 
     def release(self) -> str | None:

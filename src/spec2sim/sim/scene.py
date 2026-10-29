@@ -29,6 +29,7 @@ BIN_MAX_HEIGHT = 0.15  # taller walls block the arm's approach
 # The cabinet's open front faces the robot (-x); the drawer slides out toward the robot.
 HANDLE_STANDOFF = 0.06  # handle bar distance in front of the drawer face: room for a finger behind it
 HANDLE_THICK = 0.016
+HAND_CLEARANCE = 0.032  # fingertip center -> lowest point of the Panda hand (3.8 cm), minus 0.6 cm margin, m
 DRAWER_TRAVEL = 0.75  # fraction of the cabinet depth the drawer can slide out
 DRAWER_PULL = 0.12  # how far the '.open' anchor pulls the drawer out, m
 DRAWER_BACK_SLACK = 0.10  # the cabinet's back may sit this far beyond the reach limit
@@ -172,12 +173,15 @@ def _add_drawer(spec: mujoco.MjSpec, body: mujoco.MjsBody, o: SceneObject, grasp
         _box(dr, pos, half, rgba, _DRAWER_BITS, mass=0.08)
     _box(dr, (-dx - t, 0, 0), (t, hy - 0.001, hz - 0.001), shade, _DRAWER_BITS, mass=0.08)  # front panel
     # Handle: a horizontal bar along y on two posts, HANDLE_STANDOFF in front of the panel.
+    # It sits high on the front: the Panda hand is ~20 cm wide along the finger axis, so its underside
+    # (HAND_CLEARANCE above the fingertips) must clear the cabinet top when the fingers reach the bar.
     hl = min(0.05, 0.3 * hy * 2)
     front = -dx - 2 * t
-    _box(dr, (front - HANDLE_STANDOFF, 0, 0), (HANDLE_THICK / 2, hl, HANDLE_THICK / 2), (0.75, 0.76, 0.78, 1),
+    hz_bar = max(0.0, min(dz - HANDLE_THICK, hz - HAND_CLEARANCE))
+    _box(dr, (front - HANDLE_STANDOFF, 0, hz_bar), (HANDLE_THICK / 2, hl, HANDLE_THICK / 2), (0.75, 0.76, 0.78, 1),
          _DRAWER_BITS, mass=0.02, name=f"{o.name}/handle")
     for sy in (-1, 1):
-        _box(dr, (front - HANDLE_STANDOFF / 2, sy * (hl - 0.006), 0), (HANDLE_STANDOFF / 2, 0.005, 0.005),
+        _box(dr, (front - HANDLE_STANDOFF / 2, sy * (hl - 0.006), hz_bar), (HANDLE_STANDOFF / 2, 0.005, 0.005),
              (0.75, 0.76, 0.78, 1), _DRAWER_BITS, mass=0.01)
     if grasp_welds:
         spec.add_equality(type=mujoco.mjtEq.mjEQ_WELD, objtype=mujoco.mjtObj.mjOBJ_BODY,
@@ -194,19 +198,24 @@ DEFAULT_FRICTION = 1.5  # used when no material physics is known (runs recorded 
 # Measured: restitution MuJoCo actually produces (ball dropped 40 cm, timestep 2 ms) for a contact
 # damping ratio, with solref time constant 0.02 s. The textbook spring-damper formula overshoots
 # (the integrator adds energy at low damping), so we invert this measured curve instead.
-_E_OF_DAMPING = [(1.0, 0.06), (0.7, 0.11), (0.5, 0.23), (0.4, 0.29), (0.3, 0.38), (0.2, 0.48), (0.1, 0.60), (0.05, 0.69)]
-SIM_RESTITUTION_RANGE = (0.06, 0.69)
+_E_OF_DAMPING = [(1.0, 0.06), (0.7, 0.12), (0.6, 0.19), (0.5, 0.26), (0.4, 0.34), (0.3, 0.45), (0.25, 0.51),
+                 (0.2, 0.59), (0.15, 0.67), (0.1, 0.76)]
+SIM_RESTITUTION_RANGE = (0.06, 0.76)
 
 
 def contact_params(physics: tuple[float, float] | None) -> dict:
     """MuJoCo contact settings from (friction, restitution) found on the web.
-    solmix makes the object's settings dominate the floor's when the two are combined."""
+
+    priority 1 makes the object's own friction and bounciness apply against the floor, bins and
+    drawers (priority 0). Without it MuJoCo takes the larger of the two frictions, so a slippery
+    object (mu 0.3) on the floor (mu 1.0) would behave like mu 1.0. Two objects touching (same
+    priority) use the larger friction, as MuJoCo does by default."""
     if not physics:
         return {"friction": [DEFAULT_FRICTION, 0.05, 0.001], "solref": [0.01, 1]}
     mu, e = physics
     e = min(max(e, SIM_RESTITUTION_RANGE[0]), SIM_RESTITUTION_RANGE[1])
     damping = float(np.interp(e, [p[1] for p in _E_OF_DAMPING], [p[0] for p in _E_OF_DAMPING]))
-    return {"friction": [float(mu), 0.005, 0.0001], "solref": [0.02, damping], "solmix": 10.0}
+    return {"friction": [float(mu), 0.005, 0.0001], "solref": [0.02, damping], "priority": 1}
 
 
 def _add_objects(spec: mujoco.MjSpec, objects: list[SceneObject], grasp_welds: bool,
@@ -253,13 +262,13 @@ def build_scene(objects: list[SceneObject], allowed: set[str] | None = None,
 
     _add_objects(spec, objects, grasp_welds=True, physics=physics)
     if physics:
-        # The robot's own damped contacts win against objects (solmix 100 vs 10): fingertip pads absorb
-        # impacts, so a bouncy ball isn't kicked away by a touch; object-vs-surface contacts keep the
-        # web bounciness (object solmix 10 vs floor/bin 1).
+        # The robot's own contacts win against objects (priority 2 vs 1): fingertip pads are damped,
+        # so a bouncy ball isn't kicked away by a touch; object-vs-surface contacts keep the web
+        # friction and bounciness (object priority 1 vs floor/bin 0).
         for b in spec.bodies:
             if b.name and not b.name.startswith(OBJ_PREFIX) and b.name != "world":
                 for g in b.geoms:
-                    g.solmix = 100.0
+                    g.priority = 2
     try:
         model = spec.compile()
     except Exception as e:  # MuJoCo compile errors are plain exceptions

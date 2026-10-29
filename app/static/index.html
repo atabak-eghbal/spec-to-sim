@@ -222,6 +222,9 @@ body.theater .screen { position: fixed; inset: 0; aspect-ratio: auto; border-rad
 button.export-btn { background: none; cursor: pointer; }
 button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 .export-btn:hover { background: var(--ink); color: var(--paper); }
+.crit-sheet { margin: 0 0 10px; }
+.crit-sheet img { width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
+.crit-sheet figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -326,13 +329,14 @@ function onEvent(ev) {
     let s = state.steps.find((x) => x.key === key);
     if (!s) { s = { key, step: ev.step, attempt: ev.attempt, startTs: ev.ts, model: ev.model, escalated: ev.escalated }; state.steps.push(s); }
     if (ev.status === "done") {
-      Object.assign(s, { doneTs: ev.ts, stats: ev.stats, data: ev.data, sources: ev.sources, tavily: ev.tavily });
+      Object.assign(s, { doneTs: ev.ts, stats: ev.stats, data: ev.data, sources: ev.sources, tavily: ev.tavily, skipped: ev.skipped });
       if (ev.stats) state.cost += ev.stats.cost_usd;
       if (ev.step === "runner") { state.attempts[ev.attempt] = ev.data; state.selected = ev.attempt; }
     }
   }
   if (ev.type === "done") { state.done = ev; state.end = ev.ts; }
   if (ev.type === "note") (state.notes = state.notes || []).push(ev.message);
+  if (ev.type === "resimulated") (state.notes = state.notes || []).push(ev.note);
   if (ev.type === "error") { state.error = ev.message; state.end = ev.ts; }
 }
 
@@ -349,7 +353,9 @@ function stepBody(s) {
       if (!d.trials) return `<p>No valid perturbed variants could be generated for this scene.</p>`;
       const pct = d.trials ? d.passed / d.trials : 0;
       const pv = d.perturbation;
-      return `<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction. Physics only, no model calls (${d.seconds} s).</p>
+      const seen = pv.sensing_cm ? ` The robot sees each object up to ${pv.sensing_cm} cm from where it really is, like a camera's error.` : "";
+      const fp = d.first_plan ? ` The first plan (attempt ${d.first_plan.attempt}) passed ${d.first_plan.passed}/${d.first_plan.trials} of the same test.` : "";
+      return `<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction.${seen}${fp} Physics only, no model calls (${d.seconds} s).</p>
         <div class="robust"><span style="width:${(100 * pct).toFixed(0)}%"></span></div>
         ${d.per_goal.length > 1 ? `<p class="mono" style="font-size:.78rem">${d.per_goal.map((p) => esc(`${p.goal.obj} ${p.goal.type} ${p.goal.target || ""}`.trim()) + `: ${p.passed}/${d.trials}`).join("<br>")}</p>` : ""}`;
     }
@@ -400,12 +406,14 @@ function stepBody(s) {
       return `${d.error ? `<p class="errbox">${esc(d.error)}</p>` : ""}${goals}
         ${d.events.length ? `<ul class="ev">${d.events.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}`;
     }
-    case "critic":
-      return `<dl class="crit">
+    case "critic": {
+      const sheet = !s.skipped && state.attempts[s.attempt] && state.attempts[s.attempt].contact_sheet_path;
+      return `${sheet ? `<figure class="crit-sheet"><img src="/media/${esc(sheet)}" alt="The 8 frames the Critic watched, in order" loading="lazy"><figcaption>The 8 frames it watched</figcaption></figure>` : ""}<dl class="crit">
         <dt>Category</dt><dd><span class="pill p-bad">${esc(d.category.replace(/_/g, " "))}</span></dd>
-        <dt>What the video shows</dt><dd>${esc(d.what_happened)}</dd>
+        <dt>${s.skipped ? "Skipped" : "What the video shows"}</dt><dd>${esc(d.what_happened)}</dd>
         <dt>Root cause</dt><dd>${esc(d.root_cause)}</dd>
         <dt>Suggested fix</dt><dd>${esc(d.suggested_fix)}</dd></dl>`;
+    }
   }
   return "";
 }
@@ -555,9 +563,9 @@ function renderTimeline() {
     const running = !s.doneTs;
     const failed = s.step === "runner" && s.data && !s.data.success;
     const cls = running ? "running" : failed ? "fail" : s.escalated ? "escalated" : "done";
-    const modelLabel = s.stats ? s.stats.label : s.model || STEP_MODEL[s.step];
+    const modelLabel = s.skipped ? null : s.stats ? s.stats.label : s.model || STEP_MODEL[s.step];
     const badges = (s.step === "grounder" ? `<span class="badge b-Tavily">Tavily</span>` : "") +
-      (modelLabel ? `<span class="badge ${badgeClass(modelLabel)}">${esc(modelLabel)}</span>` : `<span class="badge b-code">MuJoCo</span>`);
+      (modelLabel ? `<span class="badge ${badgeClass(modelLabel)}">${esc(modelLabel)}</span>` : `<span class="badge b-code">${s.skipped ? "code · no model call" : "MuJoCo"}</span>`);
     let meta = "";
     if (running) meta = fmtS(Math.max(0, (state.end || now) - s.startTs));
     else if (s.stats) meta = `${fmtS(s.stats.latency_s)} · ${s.stats.tokens_in + s.stats.tokens_out} tok · ${fmt$(s.stats.cost_usd)}`;
@@ -604,7 +612,7 @@ function renderStage() {
   const st = state.steps.find((x) => x.step === "stress" && x.data);
   const lastOk = Math.max(...nums.filter((n) => state.attempts[n].success), -1);
   $("robust").hidden = !(st && state.selected === lastOk);
-  if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass and friction`;
+  if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass, friction and what the robot sees`;
   $("export").hidden = !(r && state.runId && !r.error && state.selected < TRY);
   const solved = nums.some((n) => state.attempts[n].success);
   $("dataset").hidden = !(state.done && solved && state.runId);

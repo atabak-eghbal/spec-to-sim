@@ -51,7 +51,38 @@ def test_too_wide_object_is_not_grasped(tmp_path: Path):
             _obj("b", (0.5, -0.15, C / 2))]
     r = run(Build(objects=wide, plan=_stack_plan(C / 2 + 0.05), rationale="too wide to grasp"), ON, tmp_path)
     assert not r.success
-    assert any("gripper opens only" in e for e in r.events)
+    assert not any("grasped a" in e for e in r.events)
+
+
+@pytest.mark.parametrize("offset", [(0, 0, 0.045), (0.045, 0, 0)])  # tcp 2 cm above / beside the cube
+def test_closing_near_an_object_grasps_nothing(tmp_path: Path, offset):
+    """The grasp assist needs the object between both finger pads: no 'magnet' grasps."""
+    plan = MotionPlan(actions=[Action(op="move_to", object="a", offset=(offset[0], offset[1], 0.12)),
+                               Action(op="move_to", object="a", offset=offset, duration=0.6),
+                               Action(op="close", duration=0.4),
+                               Action(op="move_to", object="a", offset=(0, 0, 0.15), duration=0.7)])
+    r = run(Build(objects=_cubes(), plan=plan, rationale="close next to the cube"),
+            [Goal(type="lifted", obj="a")], tmp_path)
+    assert not any("grasped a" in e for e in r.events), r.events
+    assert not r.success
+
+
+@pytest.mark.parametrize("mu, slides", [(0.3, True), (1.0, False)])
+def test_web_friction_decides_sliding(mu, slides):
+    """A box on the floor under a sideways pull of 0.5 g slides only if its own friction is below 0.5.
+    (Needs contact priority: MuJoCo would otherwise use the floor's 1.0 for every object.)"""
+    import mujoco
+
+    from spec2sim.sim.scene import OBJ_PREFIX
+    s = build_scene([_obj("a", (0.5, 0.2, C / 2))], physics={"a": (mu, 0.1)})
+    d = mujoco.MjData(s.model)
+    s.model.opt.gravity[:] = (0.5 * 9.81, 0, -9.81)
+    mujoco.mj_forward(s.model, d)
+    x0 = float(d.body(OBJ_PREFIX + "a").xpos[0])
+    while d.time < 0.5:
+        mujoco.mj_step(s.model, d)
+    moved = float(d.body(OBJ_PREFIX + "a").xpos[0]) - x0
+    assert (moved > 0.05) == slides, moved
 
 
 @pytest.mark.parametrize("bad", [

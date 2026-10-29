@@ -58,8 +58,10 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> tuple[str, list[str]] | 
         if width > opening:
             origin = ("size implied by its weight from the web" if f.note.startswith("size corrected")
                       else "size from the web" if f.source_url else "estimated size")
+            full = robot.gripper_opening_mm / 10 if robot else 8.0
             msg = (f"{name} is {width * 100:.1f} cm wide at its narrowest ({origin}), but the Franka gripper opens "
-                   f"only {opening * 100:.1f} cm (Franka datasheet), so no motion plan can pick it up.")
+                   f"{full:g} cm (Franka datasheet; {opening * 100:.1f} cm usable after 1 mm clearance per side), "
+                   "so no motion plan can pick it up.")
             return msg, [u for u in (f.source_url, robot.gripper_source if robot else None) if u]
         if f.mass > payload:
             return (f"{name} weighs {f.mass:.1f} kg, more than the Franka's {payload:g} kg payload (Franka datasheet).",
@@ -79,7 +81,9 @@ def _stats(stats: list[CallStat]) -> dict:
 
 
 @traceable(name="spec2sim_run")
-def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None = None) -> Iterator[dict]:
+def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None = None,
+             use_critic: bool = True) -> Iterator[dict]:
+    """use_critic=False: repairs get the measured failures only, no VLM review (eval comparison)."""
     run_id = run_id or time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     out = RUNS / run_id
     max_it = max_iterations or config.MAX_ITERATIONS
@@ -122,11 +126,17 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
         if attempt == max_it:
             break
 
-        yield _ev("step", step="critic", status="running", model=config.VL.label, attempt=attempt)
-        crit, st = critic.critique(task, b, result)
-        total_cost += sum(s.cost_usd for s in st)
-        yield _ev("step", step="critic", status="done", attempt=attempt, stats=_stats(st),
-                  data=crit.model_dump())
+        simulated = result.contact_sheet_path is not None
+        if simulated and use_critic:
+            yield _ev("step", step="critic", status="running", model=config.VL.label, attempt=attempt)
+            crit, st = critic.critique(task, b, result)
+            total_cost += sum(s.cost_usd for s in st)
+            yield _ev("step", step="critic", status="done", attempt=attempt, stats=_stats(st),
+                      data=crit.model_dump())
+        else:  # nothing to watch (scene invalid), or the no-Critic comparison: no model call
+            crit = critic.measured_only(result, simulated)
+            yield _ev("step", step="critic", status="done", attempt=attempt, skipped=True,
+                      data=crit.model_dump())
 
         m = repair_model(attempt)
         yield _ev("step", step="repair", status="running", model=m.label, attempt=attempt + 1,
