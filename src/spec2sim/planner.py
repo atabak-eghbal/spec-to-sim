@@ -62,4 +62,4 @@ Return JSON only."""
 
 @traceable(name="planner")
 def plan(prompt: str) -> tuple[TaskSpec, list[CallStat]]:
-    return chat_json("planner", config.SUPER, SYSTEM, f"Task: {prompt}", TaskSpec, max_tokens=4000)
+    return chat_json("planner", config.SUPER, SYSTEM, f"Task: {prompt}", TaskSpec, max_tokens=4000, thinking=config.SUPER_THINKING)

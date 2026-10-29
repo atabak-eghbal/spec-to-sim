@@ -44,3 +44,4 @@ DAILY_SPEND_LIMIT_USD = float(os.getenv("DAILY_SPEND_LIMIT_USD", "5"))
 STRESS_TRIALS = int(os.getenv("STRESS_TRIALS", "16"))
 
 REPAIR_CANDIDATES = int(os.getenv("REPAIR_CANDIDATES", "3"))  # Super repairs tried per failed attempt; best one runs
+SUPER_THINKING = os.getenv("SUPER_THINKING", "1") == "1"  # Nemotron reasoning for Planner/Builder/repair (eval switch)

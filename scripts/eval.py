@@ -169,6 +169,9 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "commit.txt").write_text(subprocess.run(["git", "rev-parse", "HEAD"], check=False, capture_output=True, text=True,
                                                    cwd=ROOT).stdout)
+    from spec2sim import config
+    (out / "settings.json").write_text(json.dumps({"super_thinking": config.SUPER_THINKING,
+                                                   "repair_candidates": config.REPAIR_CANDIDATES}))
     rows, spent, lock = [], [0.0], threading.Lock()
 
     def guarded(job):
