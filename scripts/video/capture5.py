@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 from rec import BASE, Shot, to_mp4
 
 HERE = Path(__file__).parent
-CLIPS4 = HERE / "clips4"
+CLIPS4 = HERE / "clips5"
 CLIPS4.mkdir(exist_ok=True)
 FRAMES = HERE / "shots"
 TH = "&theater=1&clean=1"
@@ -28,7 +28,7 @@ def shoot(ctx, name, url, seconds, **kw):
     return capture2.shoot(ctx, name, url, seconds, **kw)
 
 
-def live(wide):
+def live(wide, prompt=None):
     capture3.CLIPS3 = CLIPS4
     page = wide.new_page()
     page.goto(BASE + "/?hero=0&clean=1")
@@ -37,7 +37,7 @@ def live(wide):
     shot.start()
     shot.wait(0.8)
     page.click("#prompt")
-    page.keyboard.type(capture3.LIVE_PROMPT, delay=26)
+    page.keyboard.type(prompt or capture3.LIVE_PROMPT, delay=26)
     shot.wait(0.5)
     page.click("#runbtn")
     marks, seen, last_h, t0 = [("submit", time.time())], set(), 0, time.time()
@@ -58,7 +58,7 @@ def live(wide):
     run_id = page.evaluate("state.runId")
     dur, first = capture3._finish(shot, "c_live")
     page.close()
-    (HERE / "live_run4.json").write_text(json.dumps({"run_id": run_id, "seconds": dur,
+    (HERE / "live_run5.json").write_text(json.dumps({"run_id": run_id, "seconds": dur,
                                                       "marks": [(k, round(t - first, 2)) for k, t in marks]}, indent=1))
     print(f"c_live: {dur:.1f} s run {run_id}", flush=True)
     shoot(wide, "c3_result", f"/?run={run_id}&t=99{TH}&orbit=1", 4.6)
@@ -110,12 +110,12 @@ def replays(wide):
     first = shot.frames[0][1]
     shutil.rmtree(FRAMES / "f2_try")
     page.close()
-    (HERE / "drag4.json").write_text(json.dumps({"click": round(t_click - first, 2), "result": round(t_result - first, 2)}))
+    (HERE / "drag5.json").write_text(json.dumps({"click": round(t_click - first, 2), "result": round(t_result - first, 2)}))
     print(f"f2_try: {dur:.1f} s", flush=True)
 
 
 def data(narrow):
-    run = json.loads((HERE / "live_run4.json").read_text())["run_id"]
+    run = json.loads((HERE / "live_run5.json").read_text())["run_id"]
     page = narrow.new_page()
     page.goto(BASE + f"/?run={run}&clean=1")
     page.wait_for_timeout(4500)
@@ -135,20 +135,21 @@ def data(narrow):
     first = shot.frames[0][1]
     shutil.rmtree(FRAMES / "h1_data")
     page.close()
-    (HERE / "data4.json").write_text(json.dumps({"click": round(t_click - first, 2), "done": round(t_done - first, 2)}))
+    (HERE / "data5.json").write_text(json.dumps({"click": round(t_click - first, 2), "done": round(t_done - first, 2)}))
     print(f"h1_data: {dur:.1f} s", flush=True)
 
 
 def after(wide):
-    run_id = json.loads((HERE / "live_run4.json").read_text())["run_id"]
+    run_id = json.loads((HERE / "live_run5.json").read_text())["run_id"]
     shoot(wide, "c3_result", f"/?run={run_id}&t=99{TH}&orbit=1", 4.6)
     shoot(wide, "j1_cascade", f"/?run={run_id}&clean=1", 5.5)
 
 
 def tavily(narrow):
-    run = json.loads((HERE / "live_run4.json").read_text())["run_id"]
+    run = json.loads((HERE / "live_run5.json").read_text())["run_id"]
     capture3.CLIPS3 = CLIPS4
     capture3.slow_scroll(narrow, "d1_ground", f"/?run={run}&clean=1", "Grounder", 13.8, 240)
+    capture3.slow_scroll(narrow, "d2_grapefruit", "/?run=20261028-180549-7019&clean=1", "Grounder", 13.8, 360)
 
 
 if __name__ == "__main__":
@@ -157,7 +158,7 @@ if __name__ == "__main__":
                            args=["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--hide-scrollbars"])
     wide, narrow, _ = contexts(b)
     try:
-        {"live": lambda: live(wide), "replays": lambda: replays(wide), "data": lambda: data(narrow),
+        {"live": lambda: live(wide, sys.argv[2] if len(sys.argv) > 2 else None), "replays": lambda: replays(wide), "data": lambda: data(narrow),
          "after": lambda: after(wide),
          "tavily": lambda: tavily(narrow)}[sys.argv[1]]()
     finally:

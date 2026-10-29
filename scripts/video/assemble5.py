@@ -1,11 +1,11 @@
-"""Assemble demo video v3: no frozen or rushed footage.
+"""Assemble demo video v5: no frozen or rushed footage, subtitles as a switchable track (not burned in).
 
 Rules enforced in code:
 - every part plays at 1.0x except 3D replays capped at 1.3x; waiting is removed with jump cuts at
   1x, each labelled with the skipped time;
 - a part may never be longer than its footage (no frozen frames); static shots (cards, UI close-ups)
   get a slow push-in instead.
-Output: out/spec2sim_demo_v3.mp4 and .srt
+Output: out/spec2sim_demo_v5.mp4 (with a soft English subtitle track) and out/spec2sim_demo_v5.srt
 """
 import json
 import subprocess
@@ -19,8 +19,8 @@ from assemble2 import caption_chunks, srt_time
 from playwright.sync_api import sync_playwright
 
 HERE = Path(__file__).parent
-C1, C2, C3, CARDS, AUDIO, PARTS, OUT, CAPS = (HERE / d for d in ("clips", "clips2", "clips3", "cards", "audio",
-                                                                 "parts3", "out", "caps3"))
+C1, C2, C3, C4, CARDS, AUDIO, PARTS, OUT, CAPS = (HERE / d for d in ("clips", "clips2", "clips3", "clips5", "cards",
+                                                                     "audio", "parts5", "out", "caps5"))
 for d in (PARTS, OUT, CAPS):
     d.mkdir(exist_ok=True)
 FPS = 30
@@ -54,47 +54,49 @@ def card(name, out):
 def segments():
     T = {k: DUR[k] + 0.5 for k in ORDER}
     T["k_close"] = DUR["k_close"] + 1.6
-    live = C3 / "c_live.mp4"
-    m = dict(json.loads((HERE / "live_run3.json").read_text())["marks"])
-    drag = json.loads((HERE / "drag3.json").read_text())
-    W = [(0.6, m["submit"] + 1.0, "● LIVE"),
-         (m["planner:0:done"] - 0.4, m["planner:0:done"] + 2.2, None),
-         (m["grounder:0:done"] - 0.2, m["grounder:0:done"] + 2.6, None),
-         (m["builder:1:done"] - 0.2, m["critic:1:done"] + 1.4, None),
-         (m["repair:2:done"] - 0.1, m["repair:2:done"] + 2.1, None),
-         (m["runner:2:done"] - 0.1, m["runner:2:done"] + 2.5, None),
-         (m["stress:0:done"] - 0.1, m["stress:0:done"] + 2.6, None)]
+    live = C4 / "c_live.mp4"
+    m = dict(json.loads((HERE / "live_run5.json").read_text())["marks"])
+    drag = json.loads((HERE / "drag5.json").read_text())
+    dat = json.loads((HERE / "data5.json").read_text())
+    W = [(0.6, m["submit"] + 1.0, "● LIVE")]
+    for k in ("planner:0:done", "grounder:0:done", "builder:1:done", "runner:1:done", "critic:1:done",
+              "repair:2:done", "runner:2:done", "stress:0:done"):
+        if k in m:
+            W.append((m[k] - 0.3, m[k] + (3.2 if k.startswith("grounder") else 2.5), None))
     parts, prev_end = [], 0.0
     for a, b, tag in W:
-        skipped = a - prev_end
-        parts.append(clip(live, a, b, tag=tag or f"● LIVE · ⏭ {skipped:.0f} s skipped"))
+        parts.append(clip(live, a, b, tag=tag or f"● LIVE · ⏭ {a - prev_end:.0f} s skipped"))
         prev_end = b
     used = sum(p["out"] for p in parts)
-    parts.append(clip(C3 / "c3_result.mp4", 0, T["c_live"] - used))
+    if T["c_live"] - used < 2.0:
+        raise ValueError(f"live windows {used:.1f}s leave no room for the result shot")
+    parts.append(clip(C4 / "c3_result.mp4", 0, T["c_live"] - used))
     d_half = T["d_tavily"] / 2
-    data = C2 / "h1_data.mp4"
+    data = C4 / "h1_data.mp4"
     data_len = probe(data)
-    data_parts = [clip(data, 0, 3.5), clip(data, 36.0, 37.6, tag="⏭ 33 s skipped")]
-    tail = T["h_data"] - 6.85 - sum(p["out"] for p in data_parts)
-    data_parts.append(clip(data, data_len - tail, data_len, tag=f"⏭ {data_len - tail - 37.6:.0f} s skipped"))
+    a_end = dat["click"] + 2.2
+    mid = (dat["click"] + dat["done"]) / 2
+    tail = T["h_data"] - 6.85 - a_end - 1.6
+    data_parts = [clip(data, 0, a_end), clip(data, mid, mid + 1.6, tag=f"⏭ {mid - a_end:.0f} s skipped"),
+                  clip(data, data_len - tail, data_len, tag=f"⏭ {data_len - tail - mid - 1.6:.0f} s skipped")]
     try_a = drag["click"] + 0.4
     try_b = T["f_robust"] - 5.0 - try_a
     return [
-        ("a_hook", [clip(C1 / "a_hook.mp4", 1.5, 1.5 + T["a_hook"])]),
+        ("a_hook", [clip(C4 / "a_hook.mp4", 1.5, 1.5 + T["a_hook"])]),
         ("b_problem", [clip(C2 / "b_problem.mp4", 0, T["b_problem"])]),
         ("c_live", parts),
-        ("d_tavily", [clip(C3 / "d1_ground.mp4", 0, d_half, band=True),
-                      clip(C3 / "d2_grapefruit.mp4", 0, d_half, band=True)]),
-        ("e_repair", [clip(C2 / "e1_compare.mp4", 0, 10.5), clip(C2 / "e2_critic.mp4", 0, 6.5, out=5.5, band=True),
-                      clip(C2 / "e3_compare_end.mp4", 0, T["e_repair"] - 16.0)]),
-        ("f_robust", [card("e4_stress", 5.0), clip(C3 / "f2_try.mp4", 0, try_a),
-                      clip(C3 / "f2_try.mp4", drag["result"], drag["result"] + try_b,
+        ("d_tavily", [clip(C4 / "d1_ground.mp4", 0, d_half, band=True),
+                      clip(C4 / "d2_grapefruit.mp4", 0, d_half, band=True)]),
+        ("e_repair", [clip(C4 / "e1_compare.mp4", 0, 10.5), clip(C4 / "e2_critic.mp4", 0, 4.9, out=4.9, band=True),
+                      clip(C4 / "e3_compare_end.mp4", 0, T["e_repair"] - 15.4)]),
+        ("f_robust", [card("e4_stress", 5.0), clip(C4 / "f2_try.mp4", 0, try_a),
+                      clip(C4 / "f2_try.mp4", drag["result"], drag["result"] + try_b,
                            tag=f"⏭ {drag['result'] - try_a:.0f} s skipped")]),
-        ("g_beyond", [clip(C2 / "g1_drawer.mp4", 2.5, 7.5, out=4.0, tag="1.3× speed"),
-                      clip(C2 / "g2_knock.mp4", 0, T["g_beyond"] - 4.0)]),
+        ("g_beyond", [clip(C4 / "g1_drawer.mp4", 2.5, 7.5, out=4.0, tag="1.3× speed"),
+                      clip(C4 / "g2_knock.mp4", 0.3, 0.3 + T["g_beyond"] - 4.0)]),
         ("h_data", [*data_parts, clip(C2 / "h2_lerobot.mp4", 0, 6.8, out=6.85, push=True)]),
         ("i_fit", [clip(C2 / "i_fit.mp4", 0, 18.7, out=T["i_fit"], push=True)]),
-        ("j_rigor", [clip(C3 / "j1_cascade.mp4", 0, 5.5, push=True), card("g2_eval", T["j_rigor"] - 5.5)]),
+        ("j_rigor", [clip(C4 / "j1_cascade.mp4", 0, 5.5, push=True), card("g2_eval", T["j_rigor"] - 5.5)]),
         ("k_close", [card("h_close", T["k_close"])]),
     ]
 
@@ -151,15 +153,6 @@ def main():
                 d = span * len(c) / n
                 cues.append((t0, t0 + d, c))
                 t0 += d
-        cap_files = []
-        for k, (_, _, text) in enumerate(cues):
-            f = CAPS / f"cap_{k:03d}.png"
-            page.set_content(cards.HEAD + f"""<style>body{{background:transparent!important}}</style>
-<div style="position:absolute;left:0;right:0;bottom:58px;text-align:center"><span style="display:inline-block;max-width:1600px;
-font:500 38px/1.3 'IBM Plex Sans';color:#fff;background:rgba(8,12,16,0.78);padding:12px 26px;border-radius:10px">{text}</span></div>""")
-            page.wait_for_timeout(200)
-            page.screenshot(path=str(f), omit_background=True)
-            cap_files.append(f)
         b.close()
 
     files, i = [], 0
@@ -178,21 +171,20 @@ font:500 38px/1.3 'IBM Plex Sans';color:#fff;background:rgba(8,12,16,0.78);paddi
         k = int(starts[name] * sr)
         track[k:k + len(a)] += a[: len(track) - k]
     sf.write(PARTS / "narration.wav", track[: int(total * sr)], sr)
-    inputs = ["-i", str(video), "-i", str(PARTS / "narration.wav")]
-    for f in cap_files:
-        inputs += ["-i", str(f)]
-    chain, last = [], "[0:v]"
-    for k, (a, b2, _) in enumerate(cues):
-        chain.append(f"{last}[{k + 2}:v]overlay=0:0:enable='gte(t,{a:.3f})*lt(t,{b2 - 0.04:.3f})'[c{k}]")
-        last = f"[c{k}]"
-    chain.append(f"{last}fade=t=in:st=0:d=0.5,fade=t=out:st={total - 1.2:.2f}:d=1.2,format=yuv420p[vout]")
-    out = OUT / "spec2sim_demo_v3.mp4"
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", ";".join(chain),
-                    "-map", "[vout]", "-map", "1:a", "-af", f"afade=t=out:st={total - 1.0:.2f}:d=1.0",
-                    "-c:v", "libx264", "-crf", "19", "-preset", "slow", "-c:a", "aac", "-b:a", "160k",
-                    "-movflags", "+faststart", "-shortest", str(out)], check=True)
-    (OUT / "spec2sim_demo_v3.srt").write_text("\n".join(
-        f"{k + 1}\n{srt_time(a)} --> {srt_time(b2)}\n{text}\n" for k, (a, b2, text) in enumerate(cues)))
+    srt = OUT / "spec2sim_demo_v5.srt"
+    srt.write_text("\n".join(f"{k + 1}\n{srt_time(a)} --> {srt_time(b2)}\n{text}\n" for k, (a, b2, text) in enumerate(cues)))
+    out = OUT / "spec2sim_demo_v5.mp4"
+    # Clean video for YouTube (upload the .srt as captions: viewers switch them on with CC), plus a copy
+    # with the subtitles as a separate track for local players. Never burned in. (No -shortest: it hangs
+    # with a subtitle stream; the length is given explicitly.)
+    fade = ["-vf", f"fade=t=in:st=0:d=0.5,fade=t=out:st={total - 1.2:.2f}:d=1.2,format=yuv420p",
+            "-af", f"afade=t=out:st={total - 1.0:.2f}:d=1.0", "-t", f"{total:.3f}",
+            "-c:v", "libx264", "-crf", "19", "-preset", "medium", "-c:a", "aac", "-b:a", "160k"]
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-i", str(PARTS / "narration.wav"),
+                    "-map", "0:v", "-map", "1:a", *fade, "-movflags", "+faststart", str(out)], check=True)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(out), "-i", str(srt), "-map", "0", "-map", "1",
+                    "-c", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=eng", "-movflags", "+faststart",
+                    str(OUT / "spec2sim_demo_v5_subtitle_track.mp4")], check=True)
     print(f"total {total:.1f} s -> {out}")
     for name, parts in segs:
         print(f"  {starts[name]:6.1f}s  {name}: " + ", ".join(

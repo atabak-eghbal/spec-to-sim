@@ -162,9 +162,9 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
   <div class="status">
     <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
     <div><span class="label">Target submit</span><b>08:00 PT</b></div>
-    <div><span class="label">Model spend</span><b>$2.60 / $20 cap</b></div>
-    <div><span class="label">Eval</span><b>11 / 11 tasks pass</b></div>
-    <div><span class="label">Tests</span><b>26 / 26 passing</b></div>
+    <div><span class="label">Model spend</span><b>$4.03 / $20 cap</b></div>
+    <div><span class="label">Held-out eval</span><b>41 / 45 (91 %)</b></div>
+    <div><span class="label">Tests</span><b>30 / 30 passing</b></div>
     <div><span class="label">Repo</span><b>private until submit</b></div>
   </div>
 </header>
@@ -651,6 +651,46 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <div class="dec-body"><dl>
         <dt>Decision</dt><dd>3D replays play at most 1.3×. Waiting is cut out at normal speed, and each cut is labelled with the time skipped. The assembly refuses any shot longer than its footage, and static shots push in slowly. The live run in the video includes a real self-repair.</dd>
         <dt>Why</dt><dd>Your review of v2: some animations froze, and others went too fast (8–10× fast-forward).</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D41</span><span class="dec-title">Six simulated judges, then fix what they found</span><span class="dec-area">process</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Six reviewers with different lenses (robotics physics, LLM systems, eval rigor, product and video, engineering, rules and novelty) read the repo and ran checks. Average scores: technology 6.5, design 6.9, impact 5.3, idea 7.0. We fixed every claim the code did not back up before polishing anything else.</dd>
+        <dt>Why</dt><dd>The idea and polish were strong; the risk was a judge catching a claim that the code contradicts.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D42</span><span class="dec-title">The grasp assist needs a real grasp</span><span class="dec-area">physics</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The weld now happens only when both finger pads touch the object and it holds the fingers apart. Before, anything within 2 cm was welded, even with the fingers closed on air above it. The drawer handle moved up the front so a real grasp fits.</dd>
+        <dt>Why</dt><dd>A judge lifted a cube with the gripper 1.9 cm above it. The fix exposed that the hand had never reached the old handle: the 20 cm wide hand hit the cabinet top first. Re-simulating all 57 saved runs: 49 of 50 still pass.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D43</span><span class="dec-title">Web friction actually applies</span><span class="dec-area">physics · Tavily</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Object contacts get priority over the floor and bins, so the object's own (web-sourced) friction and bounciness are used. A test checks a box at μ 0.3 slides and at μ 1.0 holds under the same push. The bounciness calibration was re-measured.</dd>
+        <dt>Why</dt><dd>MuJoCo combines two frictions by taking the larger, and the floor is 1.0, so every web value below 1.0 was silently ignored.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D44</span><span class="dec-title">A stress test that can fail</span><span class="dec-area">eval</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Objects now move up to 4 cm and turn up to 30°, and the robot sees each object up to 0.5 cm off. Tipped-over placed objects count as failures. Recorded runs are re-simulated by a committed script, which also scores the first plan, so no robustness number is typed by hand.</dd>
+        <dt>Why</dt><dd>154 of 160 trials passed before: the old nudges were smaller than the grasp's reach, and the video's "12/20 → 20/20" had no file behind it. Now scores range from 1/16 to 16/16.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D45</span><span class="dec-title">A held-out evaluation, frozen before running</span><span class="dec-area">eval</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>15 new prompts were committed before any was run. 104 runs on one commit: held-out 41/45 (91 %, CI 79–96 %), development 29/33, Critic off 23/26. Ultra fixed 4 of 18 escalated repairs; Super fixed 18 of 28. Weak spots are published.</dd>
+        <dt>Why</dt><dd>"11/11" was one run per prompt on the prompts we had debugged against, pieced together after a crash fix. The new numbers are lower to state but can be trusted. They also show the Critic and Ultra have not yet proven their value, which we now say openly.</dd>
       </dl></div>
     </details>
 

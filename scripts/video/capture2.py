@@ -173,20 +173,20 @@ def card_pages():
 │   state (9) · action (8) · object poses
 └── videos/chunk-000/     camera mp4 per episode</pre>
 <pre class="rise" {d(1.6)} style="flex:1;font-size:26px">from lerobot.datasets.lerobot_dataset import LeRobotDataset
-ds = LeRobotDataset("spec2sim/fruit", root="dataset")
-# loads: 20 episodes, 3,340 frames
+ds = LeRobotDataset("spec2sim/bins", root="dataset")
+# loads: 20 episodes, 3,440 frames
 # observation.images.front (3, 240, 320)
 # observation.state (9,)   action (8,)</pre></div>
-<p class="lede rise" {d(2.6)} style="font-size:30px">Varied starts, masses and friction; failures dropped. The format NVIDIA GR00T post-training reads.
-Packaged as a Nebius Serverless Job: <span class="mono">scripts/generate_data.py</span></p></div>"""),
+<p class="lede rise" {d(2.6)} style="font-size:30px">Varied starts, masses and friction; failures dropped. A format NVIDIA GR00T post-training can read.
+Scripted demos, not yet used to train a policy. Packaged for a Nebius Serverless Job: <span class="mono">scripts/generate_data.py</span></p></div>"""),
         "i_fit": (18.7, f"""<div class="pad" style="gap:30px"><span class="label rise" {d(0.1)}>Where it fits in NVIDIA's robotics stack</span>
 <div class="fit"><div class="col rise" {d(1.0)}><span class="label">Isaac Lab-Arena</span><h3>Language → environment spec</h3>
 <p>An LLM writes a spec that is checked for validity.</p><div class="arrow">valid ≠ task done</div></div>
 <div class="col rise" {d(5.0)}><span class="label">Isaac Lab Mimic · GR00T blueprint</span><h3>Human demos → many demos</h3>
 <p>A few teleoperated demonstrations become thousands of synthetic ones.</p><div class="arrow">needs human demos first</div></div>
-<div class="col us rise" {d(9.0)}><span class="label" style="color:#6fc38f">Spec-to-Sim</span><h3>One sentence → verified scene + demos</h3>
+<div class="col us rise" {d(9.0)}><span class="label" style="color:#6fc38f">Spec-to-Sim</span><h3>One sentence → checked scene + demos</h3>
 <p>Running MuJoCo scene, goals checked in code, VLM-guided repair, robustness score, LeRobot dataset.</p>
-<div class="arrow" style="color:#6fc38f">no human demo · feeds GR00T</div></div></div>
+<div class="arrow" style="color:#6fc38f">no human demo · scripted, GR00T-readable</div></div></div>
 <p class="mono rise" {d(13.5)} style="font-size:26px;color:#9aabb8">Success predicates use NVIDIA RoboLab's vocabulary · scenes are plain MJCF (MuJoCo, MuJoCo Warp)</p></div>"""),
     }
 

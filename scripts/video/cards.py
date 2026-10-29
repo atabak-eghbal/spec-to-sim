@@ -31,6 +31,7 @@ h2 { font: 700 64px/1.05 "Archivo"; font-stretch: 82%; color: #fff; }
 table { border-collapse: collapse; width: 100%; font-size: 27px; }
 td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
 td.ok { color: #6fc38f; font-family: "IBM Plex Mono"; text-align: right; white-space: nowrap; }
+td.bad { color: #ec8a72; font-family: "IBM Plex Mono"; text-align: right; white-space: nowrap; }
 pre { font: 400 28px/1.5 "IBM Plex Mono"; background: rgba(0,0,0,0.35); padding: 30px 36px; border-radius: 12px; color: #d8e3ea; }
 </style>"""
 
@@ -44,12 +45,14 @@ CARDS = {
 <div class="row" style="margin-top:20px"><div class="col"><span class="label" style="color:#ec8a72">Today, by hand</span><p style="margin-top:18px">Measure the objects · write scene files · place everything · write success checks · debug. <b>Days per scene.</b></p></div>
 <div class="col"><span class="label" style="color:#6fc38f">Spec-to-Sim</span><p style="margin-top:18px">One sentence → real-world sizes from the web → scene, motion plan, checked result. <b>About a minute, about a cent.</b></p></div></div>
 {BADGES}</div>""",
-    "e4_stress": """<div class="pad"><span class="label">Stress test · 20 perturbed re-runs</span><h2>Repaired, not lucky</h2>
-<p class="lede">Each object nudged up to 1.5 cm, turned up to 9°, ±20% mass, ±30% friction. Physics only — no model calls.</p>
-<div style="margin-top:10px"><div class="mono" style="font-size:32px;color:#b9c7d2">Attempt 1 plan (ball rolled off)</div>
-<div class="bar"><span style="width:60%;background:#e2b55c"></span></div><div class="big" style="color:#e2b55c">12 / 20</div></div>
-<div><div class="mono" style="font-size:32px;color:#b9c7d2">Repaired plan</div>
-<div class="bar"><span style="width:100%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">20 / 20</div></div></div>""",
+    "e4_stress": """<div class="pad"><span class="label">Stress test · 16 perturbed re-runs, physics only</span><h2>Robust, or lucky?</h2>
+<p class="lede">Objects moved up to 4 cm and turned up to 30°, ±20% mass, ±30% friction, and the robot sees each object up to 0.5 cm off.</p>
+<div style="margin-top:6px"><div class="mono" style="font-size:30px;color:#b9c7d2">Tennis ball on the cube, repaired plan</div>
+<div class="bar"><span style="width:100%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">16 / 16</div></div>
+<div><div class="mono" style="font-size:30px;color:#b9c7d2">Bins and blocks, the live run</div>
+<div class="bar"><span style="width:93.75%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">15 / 16</div></div>
+<div><div class="mono" style="font-size:30px;color:#b9c7d2">Fruit sorting: passed once, but the soda can barely stays standing</div>
+<div class="bar"><span style="width:6.25%;background:#ec8a72"></span></div><div class="big" style="color:#ec8a72">1 / 16</div></div></div>""",
     "f4_export": """<div class="pad"><span class="label">Export scene</span><h2>Every scene is reusable</h2>
 <div class="row"><pre style="flex:0 0 640px">spec2sim-run.zip
 ├── scene_objects.xml   MuJoCo MJCF
@@ -64,20 +67,16 @@ robot.attach(objects, frame=robot.worldbody.add_frame(),
              prefix="task/")
 model = robot.compile()   # test your own policy</pre></div>
 <p class="lede" style="font-size:32px">Success checks use NVIDIA RoboLab's vocabulary: object_on_top, object_in_container, object_left_of…</p></div>""",
-    "g2_eval": """<div class="pad" style="gap:26px"><span class="label">Batch evaluation · scripts/eval.py · Nebius Serverless Job</span><h2>11 of 11 tasks pass</h2>
+    "g2_eval": """<div class="pad" style="gap:24px"><span class="label">Batch evaluation · scripts/eval.py · 104 runs, one commit, 3 per prompt</span><h2>91 % on prompts it had never seen</h2>
 <table>
-<tr><td>Stack the red cube on the blue cube</td><td class="ok">✓ pass</td></tr>
-<tr><td>Put the Rubik's cube on top of the soda can</td><td class="ok">✓ pass</td></tr>
-<tr><td>Place the tennis ball on the Rubik's cube</td><td class="ok">✓ pass</td></tr>
-<tr><td>Three-block tower: red, green, blue</td><td class="ok">✓ pass</td></tr>
-<tr><td>Clear the table: three blocks into the storage bin</td><td class="ok">✓ pass</td></tr>
-<tr><td>Apple and lime into the basket, soda can into the recycling bin</td><td class="ok">✓ pass</td></tr>
-<tr><td>Stack red on blue, then green block and tennis ball into the tray</td><td class="ok">✓ pass</td></tr>
-<tr><td>Soda can to the left of the Rubik's cube, kept upright</td><td class="ok">✓ pass</td></tr>
-<tr><td>Open the drawer, put the Rubik's cube in, close it</td><td class="ok">✓ pass</td></tr>
-<tr><td>Tennis ball and Rubik's cube into the drawer, close it</td><td class="ok">✓ pass</td></tr>
-<tr><td>Knock over the tower of three blocks</td><td class="ok">✓ pass</td></tr>
-</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Whole development so far: under $3 of model calls.</p></div>""",
+<tr><td><b>15 held-out prompts</b>, written before any was run</td><td class="ok">41 / 45 · first try 30 / 45</td></tr>
+<tr><td>11 development prompts</td><td class="ok">29 / 33 · first try 23 / 33</td></tr>
+<tr><td>Model cost per task (median)</td><td class="ok">$0.005</td></tr>
+<tr><td>Stress test, solved plans</td><td class="ok">966 / 1056 re-runs pass</td></tr>
+<tr><td>Weak spot: push a soda can over</td><td class="bad">1 / 3</td></tr>
+<tr><td>Weak spot: web says an orange is too wide to grip</td><td class="bad">false refusal 2 / 3</td></tr>
+<tr><td>Vision Critic off: no measurable difference</td><td class="ok" style="color:#e2b55c">23 / 26</td></tr>
+</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Weak spots published in docs/eval.md.</p></div>""",
 }
 
 

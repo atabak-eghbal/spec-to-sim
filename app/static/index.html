@@ -290,7 +290,7 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
       </div>
       <div class="export" id="dataset" hidden>
         <button type="button" id="dataset-btn" class="export-btn">Generate training data</button>
-        <span id="dataset-msg">20 successful demonstrations with varied starts, in LeRobot format (the format NVIDIA GR00T trains on). Physics only, no model cost.</span>
+        <span id="dataset-msg">20 successful demonstrations with varied starts, in LeRobot format (a format NVIDIA GR00T can read). Scripted demos with the grasp assist. Physics only, no model cost.</span>
       </div>
       <div class="totals">
         <div class="tot"><span class="label">Result</span><b id="t-result">—</b></div>
@@ -521,7 +521,7 @@ function dsReset() {
   clearInterval(dsTimer);
   $("dataset-btn").disabled = false;
   $("dataset-btn").textContent = "Generate training data";
-  $("dataset-msg").textContent = "20 successful demonstrations with varied starts, in LeRobot format (the format NVIDIA GR00T trains on). Physics only, no model cost.";
+  $("dataset-msg").textContent = "20 successful demonstrations with varied starts, in LeRobot format (a format NVIDIA GR00T can read). Scripted demos with the grasp assist. Physics only, no model cost.";
 }
 function dsShow(j) {
   if (j.state === "running") {
