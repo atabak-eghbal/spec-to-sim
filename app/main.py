@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from spec2sim.harness import harness_files
 from spec2sim.llm import BudgetError, check_budget
 from spec2sim.loop import RUNS, _public, run_task
 from spec2sim.provenance import provenance
@@ -195,6 +196,9 @@ Run {run_id}, attempt {attempt} ({result}).
 | scene_objects.xml | The objects as MuJoCo MJCF (no robot). Sizes and masses come from web sources (task.json). |
 | task.json | The task: objects with real-world sizes and sources, and success predicates (RoboLab names included). |
 | plan.json | The motion plan that solved it: tool-point waypoints and gripper open/close. |
+| spec2sim_env.py | Standalone test env (needs only `mujoco` + `numpy`): `Spec2SimEnv.reset(seed)`, `step(action)`, `success()`. |
+| evaluate.py | Runs your policy over N seeded, randomized episodes and prints a per-goal pass table. |
+| variations.json | The randomization ranges the env applies on `reset`. |
 
 ## Load it with the Franka Panda from MuJoCo Menagerie
 ```python
@@ -211,6 +215,16 @@ Each goal in task.json is checked on the final simulator state (see spec2sim/sim
 `on` (resting on top, height +-1.5 cm, centred within half the target's width), `inside` (object
 centroid within the bin's cavity, in the bin's frame), `left_of`/`right_of`/`in_front_of`/`behind`
 (>= 3 cm along the robot-frame axis), `upright` (tilt <= 20 deg). Use them to score your own policy.
+
+## Test your own policy (no Spec-to-Sim repo needed)
+`git clone https://github.com/google-deepmind/mujoco_menagerie`, then write `my_policy.py` with
+`act(obs) -> action` (7 arm joint targets in rad + gripper 0 closed .. 255 open) and run
+`python evaluate.py --policy my_policy.py --episodes 50 --menagerie path/to/mujoco_menagerie`.
+Each seeded episode (default 15 s, 0.1 s control step) perturbs loose objects like the stress test:
++-4 cm in x/y, +-30 deg yaw, mass +-20 %, friction +-30 %; bins and drawers never move. The goals are
+re-implemented with the same tolerances as the repo; the table and `results.json` list passes per goal.
+Not included by default: the repo's grasp assist (a weld when the closed fingers hold an object);
+`--grasp-assist` mimics it, so expect lower success without it. Robot-position sensing noise is not added.
 """
 
 
@@ -251,6 +265,8 @@ def export(run_id: str, attempt: int | None = None) -> Response:
         z.writestr("scene_objects.xml", objects_mjcf(b.objects, _facts(events).physics()))
         z.writestr("task.json", json.dumps(task_json, indent=2))
         z.writestr("plan.json", json.dumps(b.plan.model_dump(), indent=2))
+        for name, text in harness_files().items():
+            z.writestr(name, text)
         z.writestr("README.md", EXPORT_README.format(
             prompt=prompt, run_id=run_id, attempt=attempt,
             result="succeeded" if res and res["success"] else "failed"))
