@@ -54,7 +54,7 @@ def test_too_wide_object_is_not_grasped(tmp_path: Path):
     assert not any("grasped a" in e for e in r.events)
 
 
-@pytest.mark.parametrize("offset", [(0, 0, 0.045), (0.045, 0, 0)])  # tcp 2 cm above / beside the cube
+@pytest.mark.parametrize("offset", [(0, 0, 0.045), (0.045, 0, 0), (0.06, 0, 0)])  # above / beside / one fingertip on top
 def test_closing_near_an_object_grasps_nothing(tmp_path: Path, offset):
     """The grasp assist needs the object between both finger pads: no 'magnet' grasps."""
     plan = MotionPlan(actions=[Action(op="move_to", object="a", offset=(offset[0], offset[1], 0.12)),

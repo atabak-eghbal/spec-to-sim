@@ -165,11 +165,21 @@ class Controller:
                 R, half = self.d.geom_xmat[gid].reshape(3, 3), self.m.geom_size[gid]
                 body = int(self.m.geom_bodyid[gid])
                 width = float(np.sum(np.abs(R.T @ finger_axis) * 2 * half))
+                center, top = self.d.geom_xpos[gid], self.d.geom_xpos[gid][2] + half[2]
             else:
                 b = self.d.body(OBJ_PREFIX + name)
                 body, width = b.id, _width_across(o, b.xmat.reshape(3, 3), finger_axis)
+                center, top = b.xpos, b.xpos[2] + o.size[2] / 2
             sides = touch.get(body, set())
             if not sides:
+                continue
+            # Geometry, not just contact: the object's center must lie between the fingers (along the
+            # closing axis) and the finger pads must be below its top. A fingertip resting ON a box,
+            # or a pad pressing its side from outside, is not a grasp.
+            off_axis = abs(float((center - tcp) @ finger_axis))
+            if off_axis > gap / 2 + 0.003 or tcp[2] > top - 0.004:
+                reason = (f"{name} touched but not between the fingers (center {off_axis * 100:.1f} cm off the "
+                          f"grip axis, fingertips {max(0.0, (tcp[2] - top) * 100):.1f} cm above its top)")
                 continue
             if width > MAX_GRASP_WIDTH:
                 reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; the Panda gripper opens "

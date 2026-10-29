@@ -59,6 +59,17 @@ PREFIX = "task/"  # prefix used when attaching scene_objects.xml
 OBJ = PREFIX + "obj/"  # body-name prefix of every object in that file
 
 
+
+def vertical_half(shape: str, size, R) -> float:
+    """Half of an object's current vertical extent (it may be lying on its side)."""
+    sx, sy, sz = size
+    if shape == "sphere":
+        return sx / 2
+    c = min(1.0, abs(float(R[2, 2])))
+    if shape == "cylinder":
+        return c * sz / 2 + (1 - c * c) ** 0.5 * max(sx, sy) / 2
+    return float(sum(abs(float(R[2, i])) * size[i] / 2 for i in range(3)))
+
 class Obj:
     """One object from task.json (size in metres: x, y, z)."""
 
@@ -366,7 +377,9 @@ class Spec2SimEnv:
             inner = np.array(t.size[:2]) / 2 - BIN_WALL
             out_xy = np.maximum(np.abs(local[:2]) - inner, 0)
             floor, rim = -t.size[2] / 2 + BIN_WALL, t.size[2] / 2
-            ok_z = floor <= local[2] <= rim + 0.5 * o.size[2]
+            # In the cavity: centroid above the floor and the object's BOTTOM below the rim.
+            bottom = local[2] - vertical_half(o.shape, o.size, d.body(OBJ + g["obj"]).xmat.reshape(3, 3))
+            ok_z = floor <= local[2] and bottom <= rim - 0.005
             err = float(np.linalg.norm(out_xy)) + (0.0 if ok_z else abs(local[2] - rim))
             where = "inside" if err == 0 and ok_z else f"outside (off by {err * 100:.1f} cm)"
             return res(err == 0 and ok_z and not_held, f"{g['obj']} centroid is {where} {g['target']}'s cavity{held_note}")

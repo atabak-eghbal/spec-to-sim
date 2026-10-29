@@ -29,6 +29,17 @@ def _half_h(scene: Scene, name: str) -> float:
     return scene.objects[name].size[2] / 2
 
 
+def vertical_half(shape: str, size, R) -> float:
+    """Half of an object's current vertical extent (it may be lying on its side)."""
+    sx, sy, sz = size
+    if shape == "sphere":
+        return sx / 2
+    c = min(1.0, abs(float(R[2, 2])))
+    if shape == "cylinder":
+        return c * sz / 2 + (1 - c * c) ** 0.5 * max(sx, sy) / 2
+    return float(sum(abs(float(R[2, i])) * size[i] / 2 for i in range(3)))
+
+
 PLACED = ("on", "inside", "at")
 
 
@@ -117,7 +128,11 @@ def _check(scene: Scene, data: mujoco.MjData, g: Goal, held: str | None,
         inner = np.array(t.size[:2]) / 2 - BIN_WALL
         out_xy = np.maximum(np.abs(local[:2]) - inner, 0)
         floor, rim = -t.size[2] / 2 + BIN_WALL, t.size[2] / 2
-        ok_z = floor <= local[2] <= rim + 0.5 * scene.objects[g.obj].size[2]
+        # In the cavity: centroid above the floor and the object's BOTTOM below the rim (a bar lying
+        # across the top of the bin is not inside it).
+        o = scene.objects[g.obj]
+        bottom = local[2] - vertical_half(o.shape, o.size, data.body(OBJ_PREFIX + g.obj).xmat.reshape(3, 3))
+        ok_z = floor <= local[2] and bottom <= rim - 0.005
         err = float(np.linalg.norm(out_xy)) + (0.0 if ok_z else abs(local[2] - rim))
         ok = bool(err == 0 and ok_z) and held != g.obj
         where = "inside" if err == 0 and ok_z else f"outside (off by {err * 100:.1f} cm)"
