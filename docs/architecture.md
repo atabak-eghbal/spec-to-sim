@@ -14,8 +14,8 @@ flowchart LR
 
     subgraph Nebius
       TF[(Token Factory API)]
-      EP[Serverless Endpoint<br/>app + simulator]
-      JOB[Serverless Job<br/>batch eval]
+      EP[Serverless Endpoint<br/>app + simulator<br/>packaged, not yet deployed]
+      JOB[Serverless Job<br/>eval + training data<br/>packaged, not yet deployed]
     end
     P & G & B & C & F -.-> TF
     LS[(LangSmith traces)] -.- P & G & B & C & F
@@ -29,7 +29,7 @@ flowchart LR
 - `RunResult` — success bool, per-predicate errors, video path, sampled frame paths
 - `Critique` — failure category, explanation, suggested change
 
-## Planned module layout
+## Module layout (as first planned; see the README's repository map for what exists)
 ```
 src/spec2sim/
   config.py      # env + model IDs + price table
@@ -46,6 +46,6 @@ src/spec2sim/
 app/
   main.py        # FastAPI + SSE
   static/        # single-page UI
-worker/          # batch-eval entrypoint for Serverless Job
+scripts/         # eval.py and generate_data.py: Serverless Job entrypoints
 deploy/nebius/   # Dockerfile, endpoint/job create scripts
 ```

@@ -222,6 +222,17 @@ body.theater .screen { position: fixed; inset: 0; aspect-ratio: auto; border-rad
 button.export-btn { background: none; cursor: pointer; }
 button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 .export-btn:hover { background: var(--ink); color: var(--paper); }
+/* Phones: wide tables scroll inside their card; the cascade strip scrolls sideways. */
+.step-body table { display: block; max-width: 100%; overflow-x: auto; }
+@media (max-width: 520px) {
+  #prompt { min-height: 3.4rem; }
+  .cascade { grid-template-columns: repeat(7, 8.2rem); overflow-x: auto; padding-bottom: 0.3rem; }
+  .prompt-row { grid-template-columns: 1fr; }
+  button.run { padding: 0.75rem 1.4rem; }
+  .brand h1 { font-size: 1.45rem; }
+}
+.pitch { margin: 0; font-size: 1.02rem; color: var(--ink); max-width: 62rem; }
+.pitch b { font-weight: 600; }
 .crit-sheet { margin: 0 0 10px; }
 .crit-sheet img { width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
 .crit-sheet figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -241,6 +252,8 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
       <button type="button" class="theme" id="theme" title="Switch light / dark">◐</button>
     </div>
   </header>
+
+  <p class="pitch"><b>For robotics teams:</b> type one sentence, get a checked MuJoCo test scene (real object sizes from the web), a motion plan and training data in about a minute, instead of building the scene by hand.</p>
 
   <section class="composer" aria-label="New task">
     <form class="prompt-row" id="form">
@@ -602,6 +615,10 @@ const TRY = 1000; // "Your test N" results are stored as attempt TRY + N
 function renderStage() {
   const all = Object.keys(state.attempts).map(Number).sort((a, b) => a - b);
   const nums = all.filter((n) => n < TRY);
+  if (!all.length && (state.done || state.error)) {
+    const why = state.done && state.done.infeasible ? "The task was refused before any scene was built: the steps explain why." : "Nothing was simulated in this run.";
+    $("screen").innerHTML = `<div class="idle">${why}</div>`;
+  }
   $("tabs").innerHTML = all.map((n) => {
     const ok = state.attempts[n].success;
     const label = n > TRY ? `Your test ${n - TRY}` : `Attempt ${n}`;
@@ -649,7 +666,7 @@ const CASCADE = [
   { step: "builder", name: "Builder", model: "Nemotron 3 Super" },
   { step: "runner", name: "Simulator", model: "MuJoCo · checks in code" },
   { step: "critic", name: "Critic", model: "Nemotron 3.5 Super VL" },
-  { step: "repair", name: "Repair", model: "Super → Ultra" },
+  { step: "repair", name: "Repair", model: "Super, Ultra if needed" },
   { step: "stress", name: "Stress test", model: "MuJoCo · 16 variations" },
 ];
 function renderCascade() {
@@ -664,6 +681,8 @@ function renderCascade() {
       const cost = runs.reduce((a, s) => a + (s.stats ? s.stats.cost_usd : 0), 0);
       meta = `${fmtS(secs)}${cost ? " · " + fmt$(cost) : ""}`;
       if (c.step === "repair" && runs.some((s) => s.escalated)) { model = "escalated to Ultra"; if (cls !== "active") cls = "esc"; }
+      else if (c.step === "repair") model = "Nemotron 3 Super";
+      if (c.step === "critic" && runs.every((s) => s.skipped)) model = "skipped, no model call";
       if (c.step === "stress" && last.data) meta = `${last.data.passed}/${last.data.trials} robust`;
     }
     const cnt = runs.length > 1 ? `<span class="cnt">×${runs.length}</span>` : "";
