@@ -33,6 +33,15 @@ COPY app ./app
 COPY scripts/eval.py scripts/generate_data.py ./scripts/
 RUN uv sync --frozen --no-dev
 
+# Shared, pre-built web facts (material friction/bounciness, Franka limits): fresh containers
+# don't repeat those Tavily searches. Per-object searches are cached at run time.
+COPY .cache/physics ./.cache/physics
+
+# Run as a non-root user (uid 1000, as Hugging Face Spaces does) that owns the app's writable
+# folders: runs/, .cache/ (search cache, spend log) and app/.viz (browser meshes).
+RUN useradd -m -u 1000 user && mkdir -p /app/runs /app/app/.viz && chown -R user:user /app
+USER user
+
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"

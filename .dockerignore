@@ -1,7 +1,8 @@
 .env
 .venv
 .git
-.cache
+.cache/*
+!.cache/physics
 runs
 eval
 third_party
