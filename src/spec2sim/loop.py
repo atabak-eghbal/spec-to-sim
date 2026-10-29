@@ -13,6 +13,7 @@ to Ultra was dropped after the Oct 28 eval: it fixed 4 of 18 runs.) Max MAX_ITER
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from collections.abc import Iterator
@@ -189,8 +190,23 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
         st = _traced_stress(b, task.goals, config.STRESS_TRIALS, facts.physics())
         yield _ev("step", step="stress", status="done", data=st)
 
+    public = _share_trace(rt)
+    if public:
+        yield _ev("trace", trace_url=public)
     yield _ev("done", success=bool(result and result.success), attempts=attempt,
               total_cost_usd=round(total_cost, 6))
+
+
+def _share_trace(rt) -> str | None:
+    """With SPEC2SIM_SHARE_TRACES=1 (the public demo), publish this run's LangSmith trace so anyone
+    can open the link; otherwise trace links stay inside the team's workspace."""
+    if os.getenv("SPEC2SIM_SHARE_TRACES") != "1" or rt is None:
+        return None
+    try:
+        from langsmith import Client
+        return Client().share_run(rt.id)
+    except Exception:  # noqa: BLE001 - a missing public link must not fail the run
+        return None
 
 
 def fit_furniture(b) -> tuple[object, list[str]]:

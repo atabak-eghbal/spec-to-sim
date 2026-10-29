@@ -380,6 +380,7 @@ function onEvent(ev) {
     }
   }
   if (ev.type === "done") { state.done = ev; state.end = ev.ts; }
+  if (ev.type === "trace") state.trace = ev.trace_url;  // public trace link (demo server)
   if (ev.type === "note") (state.notes = state.notes || []).push(ev.message);
   if (ev.type === "resimulated") (state.notes = state.notes || []).push(ev.note);
   if (ev.type === "error") { state.error = ev.message; state.end = ev.ts; }
