@@ -247,8 +247,8 @@ World frame: robot base at the origin, +x forward, +y left, z up, floor at z = 0
 
 ## Success predicates
 Each goal in task.json is checked on the final simulator state (see spec2sim/sim/metrics.py):
-`on` (resting on top, height +-1.5 cm, centred within half the target's width), `inside` (object
-centroid within the bin's cavity, in the bin's frame), `left_of`/`right_of`/`in_front_of`/`behind`
+`on` (resting on top, height +-1.5 cm, centred within half the larger footprint), `inside` (object
+centroid above the bin's floor and its bottom at least 0.5 cm below the rim, in the bin's frame), `left_of`/`right_of`/`in_front_of`/`behind`
 (>= 3 cm along the robot-frame axis), `upright` (tilt <= 20 deg). Use them to score your own policy.
 
 ## Test your own policy (no Spec-to-Sim repo needed)

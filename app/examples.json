@@ -26,7 +26,7 @@
     },
     {
       "text": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
-      "category": "firsttry"
+      "category": "fixed"
     },
     {
       "text": "Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray",
@@ -34,7 +34,7 @@
     },
     {
       "text": "Put the soda can to the left of the Rubik's cube and keep it upright",
-      "category": "firsttry"
+      "category": "fixed"
     },
     {
       "text": "Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top",
@@ -131,7 +131,7 @@
     },
     {
       "id": "firsttry",
-      "label": "First-try successes",
+      "label": "Recorded first-try runs",
       "style": "realistic"
     }
   ]

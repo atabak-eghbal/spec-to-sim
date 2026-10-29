@@ -19,7 +19,7 @@ You type: *"Open the drawer, put the Rubik's cube inside, and close it."*
 4. **Simulate:** MuJoCo runs the Franka Panda (from MuJoCo Menagerie) through the plan. **Code checks every goal** against the final simulator state.
 5. **Watch:** Nemotron 3.5 Super VL checks a render of the scene before the robot moves, and if a goal fails it looks at 8 frames from the run plus the measured failures and explains what went wrong.
 6. **Repair:** Super writes 3 repair candidates in parallel, seeing every earlier attempt. Each is tested in the simulator (physics only, free) and the best one runs next. At most 4 attempts.
-7. **Stress-test:** a successful plan is re-run 16 times, physics only. Each time every loose object starts up to 4 cm away and turned up to 30°, weighs ±20 % and has ±30 % friction, and the robot sees each object up to 0.5 cm from where it really is (like a camera's error). The result is a robustness score: plans with no margin for error score low.
+7. **Stress-test:** a successful plan is re-run 16 times, physics only. Each time every loose object starts up to 4 cm away and turned up to 30°, weighs ±20 %, all objects share one ±30 % friction scale, and the robot sees each object up to 0.5 cm from where it really is (like a camera's error). The result is a robustness score: plans with no margin for error score low.
 8. **Generate training data:** one click turns the solved task into 20 successful demonstrations with varied starts, saved in the **LeRobot v2.1 dataset format** (Parquet + MP4, a format NVIDIA GR00T post-training also reads). The idea follows Isaac Lab Mimic: multiply demonstrations and keep the successful ones. We checked the files load with Hugging Face's `lerobot` (v0.3.3). They come from our scripted top-down controller with the grasp assist (see limitations), so treat them as a starting point, not finished training data; item 10 shows what a small policy learns from them.
 
 9. **Test your own policy:** every scene export includes `spec2sim_env.py` (MuJoCo + NumPy only: `reset(seed)` with the stress test's randomization, `step(action)`, `success()` with the same goal checks and tolerances) and `evaluate.py`, so a team can score any `act(obs)` policy on randomized versions of the scene: `python evaluate.py --policy my_policy.py --episodes 50`.
@@ -36,8 +36,8 @@ Every step streams live to the web app with the model that ran it, its time, tok
 
 ## Why it matters
 
-Robotics teams spend days hand-building simulation scenes to test a single skill: measuring objects, writing XML, tuning placements, writing success checks. Spec-to-Sim does that from one sentence in about a minute, for a few cents:
-- **Real-world grounding:** object sizes come from the web, with source links, so a soda can is 6.6 × 12.3 cm and 378 g, not a guess.
+Robotics teams spend days hand-building simulation scenes to test a single skill: measuring objects, writing XML, tuning placements, writing success checks. Spec-to-Sim does that from one sentence in about a minute, typically for under a cent:
+- **Real-world grounding:** object sizes come from the web, with source links, so a soda can is 6.6 × 12.3 cm from a packaging spec; its 378 g is estimated from that size after the web's 15 g (an empty can) was rejected as impossible.
 - **Checkable success:** goals are code predicates, using the vocabulary of NVIDIA's RoboLab benchmark (`object_on_top`, `object_in_container`, `object_left_of`, …). A vision model is never the judge (see below).
 - **Reusable output:** the export is a MuJoCo scene plus success checks that a team can use to evaluate its own policy.
 - **Robustness, not luck:** the stress test borrows the idea of Isaac Lab-Arena's sensitivity analysis, at a much smaller scale.
@@ -56,7 +56,7 @@ Robotics teams spend days hand-building simulation scenes to test a single skill
 
 ### Evaluation
 
-Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3 runs per prompt, success decided by code:
+Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3 runs per prompt, success decided by code. Both evals predate the stricter grasp and "inside" checks added on Oct 29 and have not been re-run since.
 
 | Suite | Success | First try | Model cost per task |
 |---|---|---|---|
@@ -64,7 +64,7 @@ Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3
 | 11 development prompts (the ones we built against) | 29/33 (88 %, CI 73–95 %) | 23/33 → 19/33 | median $0.006 |
 
 - **Note on "held out":** the 15 prompts were frozen before round 1 and never tuned. But two of their round-1 failures (a planner "table" object, an orange refusal) did prompt general code fixes before round 2, so round 2 is not a fully blind test. Round 1 (41/45, before those fixes) is the clean held-out number.
-- **What changed it:** the Builder writes skills and code computes the waypoints; each repair is 3 Super candidates tested in the simulator. We dropped escalation to Ultra after the first eval (it fixed 4 of 18 runs): cost per task fell from $0.013 to $0.009 with the same success rate.
+- **What changed it:** the Builder writes skills and code computes the waypoints; each repair is 3 Super candidates tested in the simulator. We dropped escalation to Ultra after the first eval (it fixed 4 of the 10 runs escalated to it, 4 of 18 attempts): mean cost per task fell from $0.013 to $0.010 with the same success rate.
 - **Weak spots:** knocking things over (2 of 6 runs fail), and apples refused as too wide. That last one was partly our bug: the size check counted a source as agreeing with itself, with a loose 20 % band, so one farm guide's 8.9 cm apple could stop a task. Now sizes use the median of 3+ sources and only independent sources within 8 % count; re-grounding the 7 refused apple runs, 6 now go ahead.
 - **Vision model:** turning the Critic off changed nothing measurable (23/26 vs 71/78), and the new pre-run scene check did not predict failures. We keep both for the explanations they show, and we don't claim they improve results.
 - Median time per task: 38 s. All 104 runs cost $0.94 of model calls.
@@ -73,7 +73,7 @@ Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3
 
 One OpenAI-compatible client and one API key; each pipeline step picks the model size it needs.
 
-**The main finding: test-time compute plus a verifier beat a bigger model.** In our first eval, failed attempts were escalated to Nemotron 3 Ultra (550B): it fixed 4 of 18, and its 67 calls were 48 % of all our model spend ($2.38 of $5.00), at a median 32 s and 8,500 output tokens each. We replaced it with three Nemotron Super repairs sampled in parallel, each tested in MuJoCo in seconds, and the best one runs: 26 of 46 repairs fixed the run, and cost per task fell from $0.013 to $0.009 with the same success rate. (The two evals also differ in other code changes, so this is not a controlled A/B.)
+**The main finding: test-time compute plus a verifier matched a bigger model at lower cost.** In our first eval, failed attempts were escalated to Nemotron 3 Ultra (550B): it fixed 4 of the 10 runs escalated to it (4 of 18 attempts), and its 67 calls were 48 % of all our model spend ($2.38 of $5.00), at a median 32 s and 8,500 output tokens each. We replaced it with three Nemotron Super repairs sampled in parallel, each tested in MuJoCo in seconds, and the best one runs: 26 of 46 repairs fixed the run, and mean cost per task fell from $0.013 to $0.010 (Critic-on runs) with the same success rate, 70/78 vs 71/78. (The two evals also differ in other code changes, so this is not a controlled A/B.)
 
 | Model | Calls | Median latency | Median output tokens | Spend |
 |---|---|---|---|---|
@@ -90,14 +90,14 @@ From `.cache/spend.jsonl`, every call made while building and evaluating the pro
 | Planner, Builder, repair (3 candidates) | **Nemotron 3 Super** (120B, 12B active) | Reliable strict-schema JSON for multi-step plans at $0.30 / $0.90 per M tokens; cheap enough to sample 3 repairs and let the simulator pick |
 | Grounder (fact extraction) | **Nemotron 3 Nano** (30B, 3B active) | Copying numbers and quotes from search results is easy; Nano does it for ~$0.0003 a call (median 7 s, most of it reading long search results) |
 | Scene check, Critic | **Nemotron 3.5 Super VL** | Looks at the built scene before the run, and at an 8-frame contact sheet after a failure; with reasoning turned off a call takes ~2–3 s |
-| (tested, then removed) | **Nemotron 3 Ultra** (550B, 55B active) | Escalated repairs fixed 4 of 18 runs in our first eval; 3 Super candidates checked by the simulator did as well for less |
+| (tested, then removed) | **Nemotron 3 Ultra** (550B, 55B active) | Escalated repairs fixed 4 of the 10 runs escalated to it (4 of 18 attempts) in our first eval; 3 Super candidates checked by the simulator did as well for less |
 
 **Where Token Factory accelerated the work:**
 - **Swapping models is a one-word change.** We moved steps between Nano, Super and Ultra just by changing `model=`, so trying another size for a step took minutes.
 - **Ultra taught us something about strict output:** even with `response_format: json_schema`, Ultra sometimes wrote its reasoning before the JSON, so `llm.py` keeps a small recovery step that takes the last JSON object in the reply.
 - **Strict JSON schema output** (`response_format: json_schema`) made every step return data we can validate with Pydantic and feed back on error.
 - **Turning reasoning off per call** (`chat_template_kwargs.enable_thinking=false`) cut the vision calls from ~25 s to a 1.9 s median and stopped them running out of tokens; planning and repair keep reasoning on.
-- **Cost is visible per call:** token counts from the API times published prices, logged for every call and shown in the UI. In the evaluation the median task cost $0.006 and the mean $0.013 (a hard failure can reach $0.23). All development, including two 104-run evaluations, cost $5.00 of model calls (table above). Prices are list prices as we found them; check them against the Token Factory console.
+- **Cost is visible per call:** token counts from the API times published prices, logged for every call and shown in the UI. In the round-2 evaluation the median task cost $0.004 and the mean $0.009 (most expensive run $0.057). All development, including two 104-run evaluations, cost $5.00 of model calls (table above). Prices are list prices as we found them; check them against the Token Factory console.
 
 **Other Nebius services (packaged, not yet deployed):** the app and simulator are one CPU container (`Dockerfile`) meant for a **Nebius Serverless Endpoint**, and `scripts/eval.py` and `scripts/generate_data.py` are written as **Nebius Serverless Job** entrypoints (`deploy/nebius/README.md`). As of Oct 28 our Nebius AI Cloud account could not create registries or endpoints (`PermissionDenied`), so every eval and dataset in this repo ran locally, and the public demo runs on a free Hugging Face Space. Token Factory serves every model call in both.
 

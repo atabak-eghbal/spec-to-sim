@@ -20,7 +20,7 @@ below: 3 runs each plus 1 with the Critic off, 104 runs, `eval/20261028-223102/`
 |---|---|---|---|---|
 | Held-out, 15 prompts | **42/45 (93 %, 95 % CI 82–98 %)** | 30/45 (67 %) | median $0.005 | 554/624 (89 %) |
 | Development, 11 prompts | 29/33 (88 %, CI 73–95 %) | 19/33 (58 %) | median $0.006 | 423/464 (91 %) |
-| **All (Critic on)** | **71/78 (91 %, CI 83–96 %)** | 49/78 (63 %) | mean $0.009, median $0.006 | 977/1088 (90 %) |
+| **All (Critic on)** | **71/78 (91 %, CI 83–96 %)** | 49/78 (63 %) | mean $0.009, median $0.005 | 977/1088 (90 %) |
 
 **Caveat on "held out" in this round.** The 15 prompts were frozen before round 1 and never tuned,
 but two of their round-1 failures (a planner "table" object; an orange refused as too wide) led to
@@ -28,7 +28,7 @@ general code fixes in `b367007`, so round 2 is not a fully blind test of those p
 (41/45) is the clean held-out number. Refusals are also counted as successes for the one
 should-refuse prompt (basketball): without it, held-out success is 39/42.
 
-Compared with round 1: success 70/78 → 71/78 (within noise), mean cost per task $0.013 → $0.009
+Compared with round 1: success 70/78 → 71/78 (within noise), mean cost per task $0.013 → $0.010 (Critic-on runs; $0.009 over all 104)
 (no Ultra), median time per task 47 s → 38 s. First try is lower (53 → 49 of 78), and repairs carry
 more of the load: 26 of 46 repairs fixed the run (57 %), against 22 of 46 in round 1. All 104 runs
 cost $0.94.
@@ -132,8 +132,8 @@ The held-out prompts did as well as the development prompts, so the success rate
 tuning on the development suite. Median wall time per task: 47 s. Total model cost of the 104 runs: $1.22.
 
 **What fails (all 8 failures with the Critic on):**
-- *Knock the soda can over* (held-out): 1/3. In two runs the push never tipped the can: the simulator reports the arm stopping short of its push target, and 3 repairs didn't fix it. In the third, the Planner listed the table as an object to place, and no build could satisfy that.
-- *Put the orange and the apple into the fruit basket* (held-out): 1/3. Twice the web size made the orange wider than the gripper, so the run was refused before building. This is a false refusal: a real orange fits.
+- *Knock the soda can over* (held-out): 1/3. Of the failed runs (two with the Critic, one without), two never tipped the can: the simulator reports the arm stopping short of its push target, and repairs didn't fix it. In the other, the Planner listed the table as an object to place, and no build could satisfy that (table objects are now dropped in code).
+- *Put the orange and the apple into the fruit basket* (held-out): 1/3. Once the orange (8.4 cm) and once the apple (8.9 cm) came back wider than the gripper, so the run was refused before building. These were false refusals from single outlier web values (fixed later, see round 2).
 - *Put the soda can to the left of the Rubik's cube* (dev): 1/3. Once the web size swapped the can's height and width (a false refusal), once 4 attempts didn't place it.
 - *Fruit basket + recycling bin* (dev): 2/3. The hardest task. One run failed after 4 attempts ($0.23, the most expensive run), and the solved runs score only 5–6/16 on the stress test: the soda can barely stays upright.
 - *Knock over the tower* (dev): 2/3. Once the plan swept the wrong block.
@@ -146,12 +146,12 @@ times. Reporting this as it is: the Critic's value is its readable diagnosis in 
 not shown it makes repairs succeed more often.
 
 **Does escalating to Ultra pay off? Not in this eval.** Super's repairs fixed the run 18 of 28 times
-(64 %). Ultra's escalated repairs fixed it 4 of 18 times (22 %), and Ultra only runs on the tasks
+(64 %). Ultra's escalated repairs fixed it 4 of 18 times (22 %; 4 of the 10 runs escalated to it), and Ultra only runs on the tasks
 that already beat Super twice, so these are the hardest cases. The data argues for trying more Super
 repairs before Ultra, or dropping Ultra.
 
 **Stress test.** Each solved plan is re-run 16 times, physics only: every loose object starts up to
-4 cm away and turned up to 30°, weighs ±20 %, has ±30 % friction, and the robot sees it up to 0.5 cm
+4 cm away and turned up to 30°, weighs ±20 %, shares one ±30 % friction scale with the other objects, and the robot sees it up to 0.5 cm
 from where it really is. Most solved tasks score 14–16/16. Fragile plans show up clearly: fruit
 sorting 5–6/16, *lime on the red block* 5/16 once, *knock the soda can over* 7/16. One solved run
 scored 0/0: every perturbed variant overlapped (crowded scene), so it has no score.
@@ -244,11 +244,11 @@ Each round exposed failures that were then fixed in code. Because the code was c
 | hard | Put the soda can to the left of the Rubik's cube and keep it upright | ✅ | 1 | $0.006 | 38 s |
 
 After round 3, the two most common first-try misses were fixed as well (the Builder may no longer add
-objects such as a table; bins narrower than 15 cm are enlarged). The next run, on Nebius, uses 3
+objects such as a table; bins narrower than 15 cm are enlarged). The next run (round 1 above) uses 3
 reps per prompt.
 
 ## Caveats
 - One rep per prompt is a small sample. The same prompt can pass on the first try in one run and
   need 3 attempts in the next, because model output varies even at low temperature.
-- Grasping uses the documented grasp assist (a weld when the closed gripper is within 2 cm of an
-  object that fits between the fingers). Placement, stacking stability and rolling are physical.
+- Grasping uses the documented grasp assist (a weld once both finger pads touch an object whose center
+  lies between the fingers; see the README). Placement, stacking stability and rolling are physical.
