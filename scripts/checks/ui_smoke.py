@@ -1,5 +1,6 @@
-"""UI smoke check (needs the app on :8000 and Playwright): click every mode, attempt tab and the ghost button on several recorded runs; report page errors and failed requests.
+"""UI smoke check (needs the app on :8000 and Playwright): click every mode, attempt tab and the ghost button on several recorded runs; report page errors and failed requests."""
 from playwright.sync_api import sync_playwright
+
 runs = ["", "?run=20261028-211134-04da", "?run=20261028-180549-7019", "?run=20261028-142918-490a", "?run=20261028-151115-e705"]
 errs = []
 with sync_playwright() as p:
