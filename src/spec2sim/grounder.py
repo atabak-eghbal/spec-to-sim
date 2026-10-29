@@ -95,6 +95,7 @@ PLAUSIBLE = {"rubber": ((0.5, 1.2), (0.5, 0.9)), "wood": ((0.2, 0.7), (0.25, 0.7
              "cardboard": ((0.3, 0.8), (0.05, 0.4)), "paper": ((0.2, 0.8), (0.05, 0.4)), "fabric": ((0.3, 1.0), (0.05, 0.5)),
              "foam": ((0.4, 1.2), (0.02, 0.3)), "fruit": ((0.2, 0.9), (0.1, 0.6))}
 ROBOT_TYPICAL = (80.0, 3.0, 855.0)  # Panda Hand stroke 80 mm, payload 3 kg, reach 855 mm
+MAX_EXTRACTS = 2  # Tavily /extract calls per run, only when search snippets carry no size
 MAX_UNCACHED = 5  # Tavily searches per run that are not served from the cache (CLAUDE.md budget)
 
 PHYS_SYSTEM = """You extract physical constants from web search results, for a robot simulation.
@@ -104,8 +105,11 @@ Blocks are labelled MATERIAL <m> FRICTION, MATERIAL <m> RESTITUTION, ROBOT GRIPP
   (0 = no bounce, 1 = perfect bounce). It is NOT a friction coefficient.
 - robot: the Franka Emika Panda Hand's maximum gripper opening (stroke) in mm; the arm's payload in kg
   and maximum reach in mm.
+Prefer a value measured for this material sliding on DRY wood (or a wooden table); a value for wet,
+lubricated or other surfaces, or from a worked example, is not acceptable: give 0 instead.
+FULL PAGE lines are passages read from the page itself; quote from them as well as from the snippets.
 For every number, copy the EXACT text it appears in, character for character, as its quote (at least
-6 words), and give that result's URL. If a block does not state the number, set the value to 0 and
+6 words, including the material and the surface it slides on), and give that result's URL. If a block does not state the number, set the value to 0 and
 the quote to "". Never write a quote that is not in the results. Return JSON only."""
 
 
@@ -258,17 +262,62 @@ def _fit_drawers(task: TaskSpec, facts: GroundedFacts) -> None:
 
 
 @traceable(name="tavily_search", run_type="retriever")
-def search(query: str, images: bool = True) -> tuple[dict, bool]:
-    """Tavily search with disk cache. Returns (response, was_cached)."""
+def search(query: str, images: bool = True, advanced: bool = False) -> tuple[dict, bool]:
+    """Tavily search with disk cache. Returns (response, was_cached). advanced=True uses Tavily's
+    advanced depth with 3 relevant chunks per page (for the shared physics facts: worth 2 credits)."""
     CACHE.mkdir(parents=True, exist_ok=True)
-    key = ("v2:" if images else "") + query.strip().lower()  # v2: results include product images
+    key = ("v2:" if images else "") + ("adv:" if advanced else "") + query.strip().lower()  # v2: with product images
     f = CACHE / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".json")
     if f.exists():
         return json.loads(f.read_text()), True
+    kw = {"search_depth": "advanced", "chunks_per_source": 3} if advanced else {}
     res = TavilyClient(config.TAVILY_API_KEY).search(query, max_results=4, include_answer="basic",
-                                                     include_images=images, include_image_descriptions=images)
+                                                     include_images=images, include_image_descriptions=images, **kw)
     f.write_text(json.dumps(res))
     return res, False
+
+
+def extract(urls: list[str], query: str) -> tuple[dict[str, str], bool]:
+    """Tavily /extract: read the pages themselves (not just search snippets) and keep the passages
+    relevant to `query`. Disk-cached. Returns ({url: text}, was_cached)."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    key = "extract:" + query.strip().lower() + "|" + "|".join(sorted(urls))
+    f = CACHE / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".json")
+    if f.exists():
+        return json.loads(f.read_text()), True
+    res = TavilyClient(config.TAVILY_API_KEY).extract(urls, query=query, chunks_per_source=3, timeout=30)
+    out = {r["url"]: (r.get("raw_content") or "")[:2500] for r in res.get("results", [])}
+    f.write_text(json.dumps(out))
+    return out, False
+
+
+SIZE_PATTERN = re.compile(r"\d+(?:[.,]\d+)?\s*(?:mm|cm|in\b|inch|inches|\"|millimet|centimet)", re.IGNORECASE)
+MATERIAL_WORDS = {"metal": ("metal", "steel", "alumin", "iron", "brass", "copper", "tin"),
+                  "plastic": ("plastic", "polyethylene", "polypropylene", "abs", "pvc", "acrylic", "nylon", "ptfe", "polystyrene"),
+                  "rubber": ("rubber",), "glass": ("glass",), "ceramic": ("ceramic", "porcelain"),
+                  "cardboard": ("cardboard", "paperboard", "corrugated"), "paper": ("paper",),
+                  "fabric": ("fabric", "felt", "cloth", "cotton", "textile", "wool"), "foam": ("foam", "polystyrene", "polyurethane"),
+                  "fruit": ("apple", "fruit", "orange", "banana", "lime", "lemon"), "wood": ("wood", "oak", "pine", "timber")}
+TABLE_WORDS = ("wood", "oak", "pine", "timber", "table", "plywood")
+BAD_CONTEXT = ("wet", "lubricat", "greas", "oiled", "example", "hypothetical", "assume", "suppose", "calculated as")
+
+
+def context_ok(quote: str, material: str, kind: str) -> tuple[bool, str]:
+    """Does a quote measure the right thing? The text must exist (checked separately); this checks it
+    is about this material, on a table-like surface for friction, and not a wet surface or a worked
+    example ("wood on wet metal 0.2" is not metal on a dry table)."""
+    q = quote.lower()
+    if any(b in q for b in BAD_CONTEXT):
+        return False, "quote is about a wet surface or a worked example"
+    if not any(w in q for w in MATERIAL_WORDS.get(material, (material,))):
+        return False, f"quote doesn't name {material}"
+    if kind == "friction":
+        others = q
+        for w in MATERIAL_WORDS.get(material, (material,)):
+            others = others.replace(w, " ", 1)  # a "wood on wood" quote must name wood twice
+        if not any(w in others for w in TABLE_WORDS):
+            return False, "quote isn't against wood or a table"
+    return True, ""
 
 
 AGREE_BAND = 0.08  # two sizes "agree" if their largest dimensions differ by at most 8 %
@@ -355,12 +404,23 @@ def physics_facts(materials: list[str], budget: int) -> tuple[list[MaterialFact]
     blocks = []
     for label, q in wanted[:budget]:
         try:
-            res, _ = search(q, images=False)
+            res, _ = search(q, images=False, advanced=True)
         except Exception as e:  # noqa: BLE001
             blocks.append(f"## {label}\n(search failed: {e})")
             continue
         info["searched"].append(q)
-        blocks.append(_block(label, q, res))
+        block = _block(label, q, res)
+        # Read the top two pages themselves (Tavily /extract, only the passages about this query):
+        # engineering tables are often cut off in search snippets.
+        top = [r["url"] for r in res.get("results", [])[:2]]
+        if top:
+            try:
+                pages, _ = extract(top, q)
+                info.setdefault("extracted", []).extend(pages)
+                block += "".join(f"\n- FULL PAGE [{u}]: {t}" for u, t in pages.items() if t)
+            except Exception as e:  # noqa: BLE001 - extraction is a bonus; snippets still work
+                info.setdefault("extract_errors", []).append(str(e)[:120])
+        blocks.append(block)
     corpus = _norm("\n".join(blocks))
     searched_mats = {b.split("\n")[0].split()[2] for b in blocks if b.startswith("## MATERIAL")}
     if blocks:
@@ -373,12 +433,16 @@ def physics_facts(materials: list[str], budget: int) -> tuple[list[MaterialFact]
             (flo, fhi), (rlo, rhi) = PLAUSIBLE.get(m, ((0.1, 1.2), (0.05, 0.9)))
             typ_f, typ_r = TYPICAL.get(m, (0.5, 0.4))
             notes = []
-            f_ok = flo <= me.friction <= fhi and verified(me.friction_quote, corpus)
-            r_ok = rlo <= me.restitution <= rhi and verified(me.restitution_quote, corpus)
+            f_ctx, f_why = context_ok(me.friction_quote, m, "friction")
+            r_ctx, r_why = context_ok(me.restitution_quote, m, "restitution")
+            f_ok = flo <= me.friction <= fhi and verified(me.friction_quote, corpus) and f_ctx
+            r_ok = rlo <= me.restitution <= rhi and verified(me.restitution_quote, corpus) and r_ctx
             if not f_ok:
-                notes.append("friction: typical value" + (f" (web {me.friction:g} rejected)" if me.friction else ""))
+                notes.append("friction: typical value" + (f" (web {me.friction:g} rejected"
+                                                          + (f": {f_why})" if me.friction and not f_ctx else ")") if me.friction else ""))
             if not r_ok:
-                notes.append("bounciness: typical value" + (f" (web {me.restitution:g} rejected)" if me.restitution else ""))
+                notes.append("bounciness: typical value" + (f" (web {me.restitution:g} rejected"
+                                                            + (f": {r_why})" if me.restitution and not r_ctx else ")") if me.restitution else ""))
             mats[m] = MaterialFact(
                 material=m, friction=round(me.friction if f_ok else typ_f, 3), restitution=round(me.restitution if r_ok else typ_r, 3),
                 friction_source=me.friction_source if f_ok else None, friction_quote=me.friction_quote[:240] if f_ok else "",
@@ -412,6 +476,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     """Returns facts, the source list for the UI, Tavily stats, and LLM call stats."""
     blocks, sources, images, cached, t0 = [], [], [], 0, time.time()
     page_text: dict[str, str] = {}  # url -> the text Tavily returned for it (to check evidence)
+    extracted: list[dict] = []
     search_s = 0.0
     queries = task.search_queries[:MAX_SEARCHES]
     for q in queries:
@@ -430,6 +495,20 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
             sources.append(Source(title=r.get("title", r["url"])[:90], url=r["url"]))
             page_text[r["url"]] = page_text.get(r["url"], "") + " " + r.get("content", "")[:600]
             lines.append(f"- [{r.get('title', '')}]({r['url']}): {r.get('content', '')[:600]}")
+        # No size in any snippet: read the top two pages themselves with Tavily /extract (only the
+        # passages about the query), at most MAX_EXTRACTS times per run.
+        snippets = " ".join(r.get("content", "") for r in res.get("results", []))
+        top = [r["url"] for r in res.get("results", [])[:2]]
+        if top and not SIZE_PATTERN.search(snippets) and len(extracted) < MAX_EXTRACTS:
+            try:
+                pages, hit_x = extract(top, q + " dimensions size weight")
+                extracted.append({"query": q, "urls": list(pages), "cached": hit_x})
+                for u, t in pages.items():
+                    if t:
+                        page_text[u] = page_text.get(u, "") + " " + t
+                        lines.append(f"- FULL PAGE [{u}]: {t[:1500]}")
+            except Exception as e:  # noqa: BLE001 - the snippets still work without it
+                extracted.append({"query": q, "error": str(e)[:120]})
         blocks.append("\n".join(lines))
         for im in res.get("images", []) or []:
             url, desc = (im.get("url"), im.get("description", "")) if isinstance(im, dict) else (im, "")
@@ -469,7 +548,7 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     materials = sorted({o.material for o in task.objects})
     facts.materials, facts.robot, pstats, pinfo = physics_facts(materials, max(0, MAX_UNCACHED - uncached_used))
     stats += pstats
-    tavily_stats = {"queries": queries, "cached": cached, "latency_s": round(search_s, 2),
+    tavily_stats = {"queries": queries, "cached": cached, "latency_s": round(search_s, 2), "extracted": extracted,
                     "total_s": round(time.time() - t0, 2),
                     "physics_searched": pinfo["searched"], "physics_cached": pinfo["cached"]}
     # Keep the sources list short and unique for the UI.

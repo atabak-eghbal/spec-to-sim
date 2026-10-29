@@ -262,6 +262,8 @@ details.step:not([open]) { opacity: 0.85; }
 .policy { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 0.7rem 0.85rem; font-size: 0.86rem; }
 .prow { display: grid; grid-template-columns: 8.5rem 1fr 3rem; gap: 0.6rem; align-items: center; margin: 0.25rem 0; }
 .prow b { font: 500 0.85rem/1 var(--mono); text-align: right; }
+.webdiff { margin: 0.2rem 0; font-size: 0.82rem; }
+.facts .sub.chg { color: var(--warn); }
 input.ed { width: 3.3rem; font: 400 0.78rem/1 var(--mono); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; padding: 0.15rem 0.2rem; }
 .crit-sheet { margin: 0 0 10px; }
 .crit-sheet img { width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
@@ -437,6 +439,13 @@ function stepBody(s) {
         : f.sources_checked > 1 ? `<span class="pill ${f.sources_agree >= 2 ? "p-ok" : "p-warn"}" title="independent web pages (checked: returned by Tavily, number found in the page) that agree with the chosen size within 8%">${f.sources_agree}/${f.sources_checked} agree</span>`
         : `<span class="pill p-ok">1 source</span>`;
       const editable = editFacts && state.done && attemptNums().length;
+      // Without web vs with web: the Planner's own size guess next to what Tavily grounded.
+      const plan = (state.steps.find((x) => x.step === "planner" && x.data) || {}).data;
+      const guess = Object.fromEntries(((plan && plan.objects) || []).map((o) => [o.name, o.approx_size_cm]));
+      const changed = (f) => { const g = guess[f.name]; if (!g || !f.source_url) return false;
+        const a = Math.max(...g), b = Math.max(...f.size) * 100; return Math.abs(a - b) / a > 0.1; };
+      const nChanged = d.facts.filter(changed).length, nWeb = d.facts.filter((f) => f.source_url).length;
+      const physWeb = (d.materials || []).reduce((n, m) => n + (m.friction_source ? 1 : 0) + (m.restitution_source ? 1 : 0), 0);
       const rows = d.facts.map((f) => {
         const m = f.material && mats[f.material];
         if (editable && !/bin|drawer/.test(f.note || "") && !/basket|bin|tray|drawer|cabinet/.test(f.name)) return `<tr data-obj="${esc(f.name)}"><td></td><td>${esc(f.name)}</td>
@@ -445,7 +454,7 @@ function stepBody(s) {
           <td class="n">μ <input class="ed" data-k="f" type="number" step="0.05" min="0.05" max="2" value="${m ? m.friction : ""}"></td></tr>`;
         return `<tr><td class="thumb">${f.image_url ? `<img src="${esc(safeUrl(f.image_url))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</td>
         <td>${esc(f.name)}${m ? `<div class="sub">${esc(f.material)} · μ ${m.friction} · bounce ${m.restitution}</div>` : ""}</td>
-        <td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
+        <td class="n">${f.size.map(cm).join(" × ")} cm${guess[f.name] ? `<div class="sub${changed(f) ? " chg" : ""}" title="the Planner model's own guess, before the web">guess ${guess[f.name].map((v) => (+v).toFixed(1)).join(" × ")}</div>` : ""}</td><td class="n">${Math.round(f.mass * 1000)} g</td>
         <td>${f.source_url ? `<a href="${esc(safeUrl(f.source_url))}" target="_blank" rel="noopener">source</a> ` : ""}${conf(f)}</td></tr>`;
       }).join("");
       // Recorded runs carry an older wording of the mass note; say what it means.
@@ -461,6 +470,7 @@ function stepBody(s) {
       const srcs = (s.sources || []).map((x) => `<a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.title)}</a>`).join("");
       const physSearch = (tv.physics_searched || []).length ? ` + ${tv.physics_searched.length} physics` : "";
       return `<p class="mono" style="font-size:.75rem"><span class="badge b-Tavily">Tavily</span> ${(tv.queries || []).length} searches${physSearch}${tv.cached ? `, ${tv.cached} from cache` : ""} · ${fmtS(tv.latency_s || 0)}</p>
+        <p class="webdiff"><b>What the web changed:</b> ${nWeb} of ${d.facts.length} objects sized from web sources${nChanged ? `, ${nChanged} of them more than 10 % away from the model's own guess` : ""}; ${physWeb} of ${2 * (d.materials || []).length} friction/bounciness values from the web (the rest typical, labelled).</p>
         <div class="tbl-scroll"><table class="facts"><thead><tr><th></th><th>Object</th><th>Real size</th><th>Mass</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table></div>
         ${checks ? `<ul class="checks">${checks}</ul>` : ""}
         ${phys ? `<details class="more" open><summary>Physics from the web (friction, bounciness)</summary><table class="facts phys"><tbody>${phys}</tbody></table></details>` : ""}
