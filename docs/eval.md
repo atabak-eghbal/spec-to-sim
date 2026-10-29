@@ -22,15 +22,24 @@ below: 3 runs each plus 1 with the Critic off, 104 runs, `eval/20261028-223102/`
 | Development, 11 prompts | 29/33 (88 %, CI 73–95 %) | 19/33 (58 %) | median $0.006 | 423/464 (91 %) |
 | **All (Critic on)** | **71/78 (91 %, CI 83–96 %)** | 49/78 (63 %) | mean $0.009, median $0.006 | 977/1088 (90 %) |
 
+**Caveat on "held out" in this round.** The 15 prompts were frozen before round 1 and never tuned,
+but two of their round-1 failures (a planner "table" object; an orange refused as too wide) led to
+general code fixes in `b367007`, so round 2 is not a fully blind test of those prompts. Round 1
+(41/45) is the clean held-out number. Refusals are also counted as successes for the one
+should-refuse prompt (basketball): without it, held-out success is 39/42.
+
 Compared with round 1: success 70/78 → 71/78 (within noise), mean cost per task $0.013 → $0.009
 (no Ultra), median time per task 47 s → 38 s. First try is lower (53 → 49 of 78), and repairs carry
 more of the load: 26 of 46 repairs fixed the run (57 %), against 22 of 46 in round 1. All 104 runs
 cost $0.94.
 
 **What still fails (7 of 78 with the Critic on):**
-- *Refused as too wide* (4): apples. Two to four web sources agree on 8.1–8.9 cm, and the Franka
-  gripper opens 8 cm, so the refusal follows the evidence. Our held-out prompt assumed an apple
-  fits; the web says many don't.
+- *Refused as too wide* (4): apples, and this was partly our bug. The size check counted the chosen
+  source as agreeing with itself and used a loose ±20 % band, so one page's 8.9 cm apple could stop a
+  task, while other runs grounded the same apple at 6.7–7.5 cm. Fixed after this round (commit
+  `a0958fd`): sizes use the median of 3+ sources, only independent sources within ±8 % count as
+  agreeing, and a size with no web source can't refuse a task. Re-grounding the 7 refused apple runs
+  with the fix: 6 go ahead, 1 stays refused (three sources agree on 8.1 cm). Not yet re-run end to end.
 - *Knock over* (2): pushing the soda can or the top block over still fails after 4 attempts.
 - *Soda can left of the Rubik's cube* (1): 4 attempts without a pass.
 
