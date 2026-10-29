@@ -15,7 +15,7 @@ for k, v in {"MUJOCO_GL": "osmesa", "PYOPENGL_PLATFORM": "osmesa", "SPEC2SIM_SHA
     os.environ.setdefault(k, v)
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
-import uvicorn  # noqa: E402
+import uvicorn
 
 try:  # only present on ZeroGPU hardware
     import spaces
