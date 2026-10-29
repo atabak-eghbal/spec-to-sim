@@ -80,7 +80,7 @@ Before any Ultra call or any Nebius resource creation that costs money, say so i
 - Small commits with clear messages. `main` is always demo-able.
 - Every module has a docstring explaining its role in the pipeline.
 - `docs/research/` holds sources; cite them in README where relevant.
-- `docs/devpost/` holds drafts of every Devpost field.
+- `docs/devpost/` holds drafts of every Devpost field (local only, not committed).
 
 ## 8. Working agreement with Claude
 - Claude Code (VS Code) builds and runs the code. The claude.ai Project chat handles research, writing, and Devpost drafts.

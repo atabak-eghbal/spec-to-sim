@@ -20,3 +20,6 @@ MUJOCO_LOG.TXT
 
 # generated robot meshes for the browser replay
 app/.viz/
+
+# Devpost drafts stay local
+docs/devpost/
