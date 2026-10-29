@@ -34,6 +34,14 @@ try:  # only present on ZeroGPU hardware
     @spaces.GPU(duration=1)
     def _gpu_placeholder() -> int:
         return 0
+
+    # `spaces` reports the GPU functions to ZeroGPU when a *Gradio* app launches; this app is plain
+    # FastAPI, so run that start-up report directly (else the Space is stopped: "No @spaces.GPU
+    # function detected during startup").
+    from spaces import zero as _zero
+
+    if hasattr(_zero, "startup"):
+        _zero.startup()
 except ImportError:
     pass
 
