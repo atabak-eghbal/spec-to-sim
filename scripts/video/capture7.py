@@ -11,12 +11,15 @@ from pathlib import Path
 
 import capture2
 import capture3
-from capture2 import DRAWER1, KNOCK, TENNIS, contexts
+from capture2 import DRAWER1, KNOCK, contexts, to_step
 from playwright.sync_api import sync_playwright
+
+TENNIS = "20261028-223723-fd3c"  # v7: the hero repair run (soda can falls, 3 candidates tested)
+POLICY_RUN = "20261028-151115-e705"
 from rec import BASE, Shot, to_mp4
 
 HERE = Path(__file__).parent
-CLIPS4 = HERE / "clips5"
+CLIPS4 = HERE / "clips7"
 CLIPS4.mkdir(exist_ok=True)
 FRAMES = HERE / "shots"
 TH = "&theater=1&clean=1"
@@ -58,7 +61,7 @@ def live(wide, prompt=None):
     run_id = page.evaluate("state.runId")
     dur, first = capture3._finish(shot, "c_live")
     page.close()
-    (HERE / "live_run5.json").write_text(json.dumps({"run_id": run_id, "seconds": dur,
+    (HERE / "live_run7.json").write_text(json.dumps({"run_id": run_id, "seconds": dur,
                                                       "marks": [(k, round(t - first, 2)) for k, t in marks]}, indent=1))
     print(f"c_live: {dur:.1f} s run {run_id}", flush=True)
     shoot(wide, "c3_result", f"/?run={run_id}&t=99{TH}&orbit=1", 4.6)
@@ -74,7 +77,7 @@ def from_start(seconds):
 
 
 def replays(wide):
-    shoot(wide, "a_hook", f"/?run={DRAWER2}{TH}&orbit=1", 0, during=from_start(20.5))
+    shoot(wide, "a_hook", f"/?run={TENNIS}&view=compare{TH}", 0, during=from_start(9))
     shoot(wide, "e1_compare", f"/?run={TENNIS}&view=compare{TH}", 0, during=from_start(10.5))
     shoot(wide, "e3_compare_end", f"/?run={TENNIS}&view=compare&t=99{TH}&orbit=1", 4.5)
     shoot(wide, "g1_drawer", f"/?run={DRAWER1}{TH}", 0, during=from_start(16))
@@ -110,12 +113,24 @@ def replays(wide):
     first = shot.frames[0][1]
     shutil.rmtree(FRAMES / "f2_try")
     page.close()
-    (HERE / "drag5.json").write_text(json.dumps({"click": round(t_click - first, 2), "result": round(t_result - first, 2)}))
+    (HERE / "drag7.json").write_text(json.dumps({"click": round(t_click - first, 2), "result": round(t_result - first, 2)}))
     print(f"f2_try: {dur:.1f} s", flush=True)
 
 
+def story(narrow):
+    """Close-ups of the hero run's Critic and Repair cards, and the policy report card."""
+    capture2.CLIPS = CLIPS4
+    shoot(narrow, "e2_critic", f"/?run={TENNIS}&clean=1", 6.5, before=to_step("Critic", 6))
+    shoot(narrow, "e2b_repair", f"/?run={TENNIS}&clean=1", 6.5, before=to_step("Repair", 6))
+
+    def to_policy(page):
+        page.evaluate("document.getElementById('policy').scrollIntoView({block: 'center'})")
+        page.wait_for_timeout(400)
+    shoot(narrow, "h3_policy", f"/?run={POLICY_RUN}&clean=1", 7.0, before=to_policy)
+
+
 def data(narrow):
-    run = json.loads((HERE / "live_run5.json").read_text())["run_id"]
+    run = json.loads((HERE / "live_run7.json").read_text())["run_id"]
     page = narrow.new_page()
     page.goto(BASE + f"/?run={run}&clean=1")
     page.wait_for_timeout(4500)
@@ -135,21 +150,28 @@ def data(narrow):
     first = shot.frames[0][1]
     shutil.rmtree(FRAMES / "h1_data")
     page.close()
-    (HERE / "data5.json").write_text(json.dumps({"click": round(t_click - first, 2), "done": round(t_done - first, 2)}))
+    (HERE / "data7.json").write_text(json.dumps({"click": round(t_click - first, 2), "done": round(t_done - first, 2)}))
     print(f"h1_data: {dur:.1f} s", flush=True)
 
 
 def after(wide):
-    run_id = json.loads((HERE / "live_run5.json").read_text())["run_id"]
+    run_id = json.loads((HERE / "live_run7.json").read_text())["run_id"]
     shoot(wide, "c3_result", f"/?run={run_id}&t=99{TH}&orbit=1", 4.6)
     shoot(wide, "j1_cascade", f"/?run={run_id}&clean=1", 5.5)
 
 
 def tavily(narrow):
-    run = json.loads((HERE / "live_run5.json").read_text())["run_id"]
+    run = json.loads((HERE / "live_run7.json").read_text())["run_id"]
     capture3.CLIPS3 = CLIPS4
-    capture3.slow_scroll(narrow, "d1_ground", f"/?run={run}&clean=1", "Grounder", 13.8, 240)
-    capture3.slow_scroll(narrow, "d2_grapefruit", "/?run=20261028-180549-7019&clean=1", "Grounder", 13.8, 360)
+    capture3.slow_scroll(narrow, "d1_ground", f"/?run={run}&clean=1", "Real-world facts", 13.8, 240)
+    capture3.slow_scroll(narrow, "d2_grapefruit", "/?run=20261028-180549-7019&clean=1", "Real-world facts", 9.0, 260)
+
+
+def refused(wide):
+    def to_card(page):
+        page.evaluate("document.getElementById('outcome').scrollIntoView({block: 'start'})")
+        page.wait_for_timeout(400)
+    shoot(wide, "d3_refused", "/?run=20261028-180549-7019&clean=1", 6.0, before=to_card)
 
 
 if __name__ == "__main__":
@@ -159,7 +181,7 @@ if __name__ == "__main__":
     wide, narrow, _ = contexts(b)
     try:
         {"live": lambda: live(wide, sys.argv[2] if len(sys.argv) > 2 else None), "replays": lambda: replays(wide), "data": lambda: data(narrow),
-         "after": lambda: after(wide),
+         "after": lambda: after(wide), "story": lambda: story(narrow), "refused": lambda: refused(wide),
          "tavily": lambda: tavily(narrow)}[sys.argv[1]]()
     finally:
         b.close()

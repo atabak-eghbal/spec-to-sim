@@ -22,39 +22,36 @@ HERE = Path(__file__).parent
 OUT = HERE / "audio"
 
 SEGMENTS = {
-    "a_hook": "One sentence in. A robot simulation out: checked by code, repaired by AI when it fails, "
-              "and turned into training data.",
+    "a_hook": "One sentence in. A robot simulation out: checked by code, repaired when it fails, and turned into a "
+              "test that any robot policy can take.",
     "b_problem": "Building one robot test scene by hand takes days: measuring objects, writing scene files, "
                  "writing success checks. Spec-to-Sim does it from plain English, with NVIDIA Nemotron models "
                  "on Nebius Token Factory.",
     "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily grounds "
-              "every object in real sizes, with photos. Super places the objects and plans the motion, as data, never "
-              "code. MuJoCo runs it, code checks every goal, and a stress test re-runs the plan sixteen times. "
-              "Fifteen of sixteen pass.",
-    "d_tavily": "Tavily is the reality check. Every size is cross-checked across sources, with photos and links. "
-                "Friction and bounciness come from the web too, and MuJoCo uses them, so a rubber ball bounces like one. "
-                "Even the robot's limits come from Franka's datasheet. When the web says a grapefruit is eighteen "
-                "centimetres but weighs two hundred and forty-six grams, the weight wins: it's really eight. Still too "
-                "wide for the gripper, so Spec-to-Sim stops in seconds and says why.",
-    "e_repair": "When a plan fails, it fixes itself. On the left, the ball was released a centimetre and a half too "
-                "high, and rolled off. Code measures the miss. Nemotron Super V L looks at the frames and explains "
-                "why, and Super rewrites the plan. On the right, attempt two. If a repair fails again, it escalates "
-                "to Nemotron Ultra.",
-    "f_robust": "But is it robust, or lucky? Every success is re-run sixteen times: objects moved, heavier, more "
-                "slippery, and the robot's view half a centimetre off. Good plans pass almost every time. A fragile "
-                "one passes once, so you know before you trust it. And you can try to break it yourself: drag an "
-                "object, re-run the same plan, no AI cost.",
+              "every object in real sizes. Super writes the plan as skills, pick and place, and code turns them into "
+              "motion. Super V L checks the scene before the robot moves. MuJoCo runs it, code checks every goal, and "
+              "the plan is re-run sixteen times. Thirteen pass.",
+    "d_tavily": "Tavily is the reality check. Every size is cross-checked across sources, with photos and links, and "
+                "friction and bounciness come from the web too. Even the robot's limits come from Franka's datasheet. "
+                "When the web says a grapefruit is eighteen centimetres but weighs two hundred and forty-six grams, the "
+                "weight wins: it's really eight. Still too wide for the gripper, so Spec-to-Sim stops in seconds and says why.",
+    "e_repair": "When a plan fails, it repairs itself. In an earlier run of the same task, the can was let go too high "
+                "and fell over. Code measures it, and Super V L watches the frames and explains why. Then Super writes "
+                "three repairs, the simulator tests each one in seconds, and the best one runs. Attempt two passes.",
+    "f_robust": "Robust, or lucky? Every success is re-run sixteen times: objects moved, heavier, more slippery, and the "
+                "robot's view half a centimetre off. Good plans pass almost every time; a fragile one passes once. "
+                "And you can try to break it yourself: drag an object, or change its size or weight, and re-run.",
     "g_beyond": "It goes beyond pick and place: gripping a drawer handle to open and close it, and knocking "
                 "things over.",
-    "h_data": "Then one click turns a solved task into training data: twenty successful demonstrations with varied "
-              "starts, failures dropped, in the LeRobot format that NVIDIA GR00T can read. They're scripted demos, a "
-              "starting point, and the same script is packaged to run as a Nebius Serverless Job.",
-    "i_fit": "Where it fits: Isaac Lab Arena turns language into a valid environment spec. Mimic and the GR00T "
-             "blueprint multiply human demonstrations. Spec-to-Sim goes from one sentence to a checked, running "
-             "scene and scripted demonstrations, with no human demo to start from.",
-    "j_rigor": "Four Nemotron models, each sized to its job. On fifteen prompts it had never seen, ninety-one percent "
-               "succeed, for about half a cent each. We publish the weak spots too, and every call is traced in LangSmith.",
-    "k_close": "Spec-to-Sim. Describe it. Simulate it. Trust it.",
+    "h_data": "One click turns a solved task into training data: twenty demonstrations in the LeRobot format. We trained "
+              "a small policy on them and tested it on the same sixteen variations. It matches the plan on a simple "
+              "stack, but drops to four of sixteen on the tennis ball. That's what a test is for.",
+    "i_fit": "And every export is that test. The scene, the same random variations, and the same goal checks, in one "
+             "file that only needs MuJoCo. Bring your own policy, and get its score.",
+    "j_rigor": "On fifteen prompts it had never seen, ninety-three percent succeed, for about half a cent each. When "
+               "the data showed the biggest model wasn't helping, we cut it. We publish the weak spots too, and every "
+               "call is traced in LangSmith.",
+    "k_close": "Spec-to-Sim. Describe it. Simulate it. Test it.",
 }
 
 
