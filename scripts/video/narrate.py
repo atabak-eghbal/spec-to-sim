@@ -27,18 +27,17 @@ SEGMENTS = {
     "b_problem": "Building one robot test scene by hand takes days: measuring objects, writing scene files, "
                  "writing success checks. Spec-to-Sim does it from plain English, with NVIDIA Nemotron models "
                  "on Nebius Token Factory.",
-    "c_live": "Here's a live run. Nemotron Super turns the request into goals that code can check. Tavily grounds "
-              "every object in real sizes. Super writes the plan as skills, pick and place, and code turns them into "
-              "motion. Super V L checks the scene before the robot moves. MuJoCo runs it, code checks every goal, and "
-              "the plan is re-run sixteen times. Thirteen pass.",
+    "c_live": "Here's a live run. Super turns the request into goals code can check, Tavily grounds the real sizes, "
+              "and Super writes the plan as skills. Attempt one misses: code measures the red block level with the blue "
+              "one, not in front. Super V L explains why. Super writes three repairs, and the simulator is the judge: it "
+              "tests each one and runs the sturdiest. Attempt two passes, and fifteen of sixteen perturbed re-runs agree.",
     "d_tavily": "Tavily is the reality check. Every size is cross-checked across sources, with photos and links, and "
                 "friction and bounciness come from the web too. Even the robot's limits come from Franka's datasheet. "
                 "When the web says a grapefruit is eighteen centimetres but weighs two hundred and forty-six grams, the "
                 "weight wins: it's really eight. Still too wide for the gripper, so Spec-to-Sim stops in seconds and says why.",
-    "e_repair": "When a plan fails, it repairs itself. In an earlier run of the same task, the can was let go too high "
-                "and fell over. Code measures it, and Super V L watches the frames and explains why. Then Super writes "
-                "three repairs, and the simulator is the judge: it tests each one in seconds, and the best one runs. "
-                "Attempt two passes.",
+    "e_repair": "Another task, side by side. On the left, the first plan let the soda can go too high, and it fell "
+                "over. On the right, the repaired plan sets it down upright. The vision model's diagnosis is there for "
+                "you to read, and the three candidates it led to, checked by physics.",
     "f_robust": "Robust, or lucky? Every success is re-run sixteen times: objects moved, heavier, more slippery, and the "
                 "robot's view half a centimetre off. Good plans pass almost every time; a fragile one passes once. "
                 "And you can try to break it yourself: drag an object, or change its size or weight, and re-run.",
@@ -51,7 +50,8 @@ SEGMENTS = {
              "small package that needs only MuJoCo and NumPy. Bring your own policy, and get its score.",
     "j_rigor": "On fifteen held-out prompts, forty-two of forty-five runs succeed, typically for under a cent. When the "
                "data showed the biggest model wasn't helping, we cut it: three cheap repairs, checked by the simulator, "
-               "do as well. We publish the weak spots too, and every call is traced in LangSmith.",
+               "do as well. And reasoning pays for itself: switched off, success fell from eleven of eleven to six. Every "
+               "call is traced in LangSmith.",
     "k_close": "Spec-to-Sim. Describe it. Simulate it. Test it.",
 }
 

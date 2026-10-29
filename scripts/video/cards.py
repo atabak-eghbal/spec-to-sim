@@ -49,8 +49,8 @@ CARDS = {
 <p class="lede">Objects moved up to 4 cm and turned up to 30°, ±20% mass, ±30% friction, and the robot sees each object up to 0.5 cm off.</p>
 <div style="margin-top:6px"><div class="mono" style="font-size:30px;color:#b9c7d2">Tennis ball on the cube, repaired plan</div>
 <div class="bar"><span style="width:100%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">16 / 16</div></div>
-<div><div class="mono" style="font-size:30px;color:#b9c7d2">Soda can left of the cube, the live run</div>
-<div class="bar"><span style="width:81.25%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">13 / 16</div></div>
+<div><div class="mono" style="font-size:30px;color:#b9c7d2">Red block in front of the blue block, the live run</div>
+<div class="bar"><span style="width:93.75%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">15 / 16</div></div>
 <div><div class="mono" style="font-size:30px;color:#b9c7d2">An earlier fruit-sorting plan: passed once, soda can barely stays standing</div>
 <div class="bar"><span style="width:6.25%;background:#ec8a72"></span></div><div class="big" style="color:#ec8a72">1 / 16</div></div></div>""",
     "f4_export": """<div class="pad"><span class="label">Export scene</span><h2>Every scene is reusable</h2>
@@ -73,6 +73,7 @@ model = robot.compile()   # test your own policy</pre></div>
 <tr><td>11 development prompts</td><td class="ok">29 / 33</td></tr>
 <tr><td>Model cost per task (median)</td><td class="ok">$0.004</td></tr>
 <tr><td>Cut: Ultra escalation (fixed 4 of the 10 runs sent to it)</td><td class="ok" style="color:#e2b55c">→ 3 Super repairs, tested in sim</td></tr>
+<tr><td>Super reasoning off (11 dev prompts)</td><td class="bad">6 / 11, vs 11 / 11 on</td></tr>
 <tr><td>Vision model: Critic and scene check</td><td class="ok" style="color:#e2b55c">no measurable gain yet</td></tr>
 <tr><td>Weak spot: pushing things over</td><td class="bad">4 / 6</td></tr>
 </table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Round 2 of 2; caveats and every number in docs/eval.md.</p></div>""",
@@ -122,6 +123,14 @@ CHAPTERS = {"b_problem": ("", "The problem"), "c_live": ("1", "A live run"), "d_
             "i_fit": ("7", "Test your own policy"), "j_rigor": ("", "Evaluation")}
 
 
+def title_lower() -> str:
+    """Opening title as a lower third over the first clip (no separate title card)."""
+    return """<style>body{background:transparent!important}</style>
+<div style="position:absolute;left:56px;bottom:64px;background:rgba(10,15,20,0.86);border-left:8px solid #7fb0e0;border-radius:12px;padding:26px 34px;max-width:1240px">
+<div style="font:800 96px/0.95 Archivo;font-stretch:78%;color:#fff">Spec-to-Sim</div>
+<div style="font:500 34px/1.3 IBM Plex Sans;color:#dbe5ec;margin-top:12px">One sentence → a checked robot simulation. When a plan fails, the simulator picks the fix.</div></div>"""
+
+
 def chapter(num: str, title: str) -> str:
     n = f'<span style="font:600 30px/1 IBM Plex Mono;color:#0d1318;background:#7fb0e0;border-radius:6px;padding:8px 13px;margin-right:18px">{num}</span>' if num else ""
     return f"""<style>body{{background:transparent!important}}</style>
@@ -147,6 +156,8 @@ def main(tags=()):
                         "-frames:v", "1", str(tbg)], check=True)
         page.set_content(HEAD + title_card(tbg)); page.wait_for_timeout(1200)
         page.screenshot(path=str(OUT / "a_title.png"))
+        page.set_content(HEAD + title_lower()); page.wait_for_timeout(600)
+        page.screenshot(path=str(OUT / "chapter_a_hook.png"), omit_background=True)
         for key, (num, title) in CHAPTERS.items():
             page.set_content(HEAD + chapter(num, title)); page.wait_for_timeout(300)
             page.screenshot(path=str(OUT / f"chapter_{key}.png"), omit_background=True)

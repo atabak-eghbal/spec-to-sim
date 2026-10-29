@@ -59,9 +59,10 @@ def segments():
     drag = json.loads((HERE / "drag7.json").read_text())
     dat = json.loads((HERE / "data7.json").read_text())
     W = [(0.6, m["submit"] + 1.0, "● LIVE")]
-    for k in ("planner:0:done", "grounder:0:done", "builder:1:done", "scenecheck:0:done", "runner:1:done", "stress:0:done"):
+    for k in ("grounder:0:done", "builder:1:done", "runner:1:done", "critic:1:done", "repair:2:done",
+              "runner:2:done", "stress:0:done"):
         if k in m:
-            W.append((m[k] - 0.3, m[k] + (3.2 if k.startswith("grounder") else 2.6), None))
+            W.append((m[k] - 0.3, m[k] + (3.0 if k.startswith("grounder") else 2.3), None))
     parts, prev_end = [], 0.0
     for a, b, tag in W:
         if a < prev_end:  # steps that finish close together: extend the previous window instead
@@ -77,7 +78,8 @@ def segments():
     used = sum(p["out"] for p in parts)
     if T["c_live"] - used < 2.0:
         raise ValueError(f"live windows {used:.1f}s leave no room for the result shot")
-    parts.append(clip(C4 / "c3_result.mp4", 0, T["c_live"] - used))
+    rest = T["c_live"] - used
+    parts.append(clip(C4 / "c3_result.mp4", 0, min(rest, probe(C4 / "c3_result.mp4")), out=rest, push=True))
     d3 = 6.0
     d1 = 11.0
     data = C4 / "h1_data.mp4"
@@ -91,15 +93,15 @@ def segments():
     try_b = min(T["f_robust"] - 5.0 - try_a, probe(C4 / "f2_try.mp4") - drag["result"])
     e3 = probe(C4 / "e3_compare_end.mp4")
     return [
-        ("a_hook", [card("a_title", 3.6), clip(C4 / "a_hook.mp4", 0.5, 0.5 + T["a_hook"] - 3.6)]),
+        ("a_hook", [clip(C4 / "a_hook.mp4", 0, 9.0, out=T["a_hook"], push=True)]),  # cold open on fail -> fix; title as a lower third
         ("b_problem", [clip(C2 / "b_problem.mp4", 0, T["b_problem"])]),
         ("c_live", parts),
         ("d_tavily", [clip(C4 / "d1_ground.mp4", 0, d1, band=True),
                       clip(C4 / "d2_grapefruit.mp4", 0, T["d_tavily"] - d1 - d3, band=True),
                       clip(C4 / "d3_refused.mp4", 0, d3)]),
-        ("e_repair", [clip(C4 / "e1_compare.mp4", 0, 7.0),
-                      clip(C4 / "e2_critic.mp4", 0, 3.7, band=True),
-                      clip(C4 / "e2b_repair.mp4", 0, T["e_repair"] - 7.0 - 3.7 - e3, band=True, push=True),
+        ("e_repair", [clip(C4 / "e1_compare.mp4", 0, 6.5),
+                      clip(C4 / "e2_critic.mp4", 0, 3.0, band=True),
+                      clip(C4 / "e2b_repair.mp4", 0, T["e_repair"] - 6.5 - 3.0 - e3, band=True, push=True),
                       clip(C4 / "e3_compare_end.mp4", 0, e3)]),
         ("f_robust", [card("e4_stress", T["f_robust"] - try_a - try_b), clip(C4 / "f2_try.mp4", 0, try_a),
                       clip(C4 / "f2_try.mp4", drag["result"], drag["result"] + try_b,
@@ -213,8 +215,9 @@ def main():
         if not chip.exists():
             continue
         t0 = starts[name] + 0.15
-        inputs += ["-loop", "1", "-t", "3.2", "-i", str(chip)]
-        chain.append(f"[{n}:v]format=rgba,fade=t=in:st=0:d=0.35:alpha=1,fade=t=out:st=2.8:d=0.4:alpha=1,"
+        dur = 6.0 if name == "a_hook" else 3.2  # the opening title stays up longer
+        inputs += ["-loop", "1", "-t", f"{dur}", "-i", str(chip)]
+        chain.append(f"[{n}:v]format=rgba,fade=t=in:st=0:d=0.35:alpha=1,fade=t=out:st={dur - 0.4}:d=0.4:alpha=1,"
                      f"setpts=PTS-STARTPTS+{t0:.3f}/TB[c{n}]")
         chain.append(f"{last}[c{n}]overlay=0:0:eof_action=pass[o{n}]")
         last, n = f"[o{n}]", n + 1
