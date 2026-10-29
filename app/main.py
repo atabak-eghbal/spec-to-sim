@@ -14,6 +14,7 @@ import asyncio
 import gzip
 import io
 import json
+import os
 import shutil
 import threading
 import time
@@ -22,7 +23,7 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -65,9 +66,31 @@ class _Live:
     def __init__(self) -> None:
         self.events: list[dict] = []
         self.done = False
+        self.finished = 0.0
 
 
 _live: dict[str, _Live] = {}
+
+# Public-demo guards: a cap on runs waiting or running, one live run per visitor per RUN_COOLDOWN_S,
+# and finished runs dropped from memory after LIVE_TTL_S (they stay on disk and keep replaying).
+MAX_PENDING = int(os.getenv("MAX_PENDING_RUNS", "4"))
+RUN_COOLDOWN_S = float(os.getenv("RUN_COOLDOWN_S", "60"))
+LIVE_TTL_S = 3600
+_last_start: dict[str, float] = {}
+_guard = threading.Lock()
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?")
+
+
+def _evict() -> None:
+    now = time.time()
+    for rid, lv in list(_live.items()):
+        if lv.done and now - lv.finished > LIVE_TTL_S:
+            _live.pop(rid, None)
+            _datasets.pop(rid, None)
 
 
 class RunRequest(BaseModel):
@@ -95,7 +118,7 @@ def _worker(run_id: str, prompt: str, live: _Live) -> None:
         emit({"type": "error", "ts": time.time(), "message": f"{type(e).__name__}: {e}"})
     finally:
         _slots.release()
-        live.done = True
+        live.done, live.finished = True, time.time()
         log.close()
 
 
@@ -110,14 +133,26 @@ def examples() -> dict:
 
 
 @app.post("/api/runs")
-def start_run(req: RunRequest) -> dict:
+def start_run(req: RunRequest, request: Request) -> dict:
     try:
         check_budget()
     except BudgetError as e:
         raise HTTPException(429, f"Live runs are paused: {e}. The recorded runs below still replay.") from e
-    run_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
-    live = _Live()
-    _live[run_id] = live
+    ip = _client_ip(request)
+    with _guard:
+        _evict()
+        now = time.time()
+        wait = RUN_COOLDOWN_S - (now - _last_start.get(ip, 0.0))
+        if wait > 0:
+            raise HTTPException(429, f"One live run per minute per visitor: try again in {wait:.0f} s. "
+                                     "The recorded runs replay any time.")
+        if sum(not lv.done for lv in _live.values()) >= MAX_PENDING:
+            raise HTTPException(429, "The simulator is busy with other visitors' runs. Please try again in a "
+                                     "minute; the recorded runs replay any time.")
+        _last_start[ip] = now
+        run_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
+        live = _Live()
+        _live[run_id] = live
     threading.Thread(target=_worker, args=(run_id, req.prompt.strip(), live), daemon=True).start()
     return {"run_id": run_id}
 
@@ -288,6 +323,7 @@ class TryRequest(BaseModel):
 
 
 _try_lock = threading.Lock()
+MAX_TRIES = 30  # "your tests" per run
 
 
 @app.post("/api/runs/{run_id}/try")
@@ -330,14 +366,20 @@ def try_it(run_id: str, req: TryRequest) -> dict:
         objs.append(o)
     b = b.model_copy(update={"objects": objs})
     goals = [Goal(**g) for g in task["goals"]]
-    with _try_lock:  # one at a time: it's CPU work on the web server
+    if len(list((RUNS / run_id).glob("try*"))) >= MAX_TRIES:
+        raise HTTPException(429, f"This run already has {MAX_TRIES} tests; open another run to keep trying.")
+    if not _try_lock.acquire(blocking=False):  # busy: answer at once instead of tying up a server thread
+        raise HTTPException(429, "The simulator is busy with another test; try again in a few seconds.")
+    try:
         n = len(list((RUNS / run_id).glob("try*"))) + 1
         r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects}, physics)
+    finally:
+        _try_lock.release()
     return {"try": n, "attempt": req.attempt, "result": _public(r, run_id), "edits": req.model_dump()["edits"]}
 
 
 class DatasetRequest(BaseModel):
-    episodes: int = Field(20, ge=5, le=50)
+    episodes: int = Field(20, ge=5, le=20)
 
 
 _datasets: dict[str, dict] = {}
@@ -395,5 +437,5 @@ def dataset_status(run_id: str) -> dict:
 
 
 @app.get("/healthz")
-def healthz() -> dict:
+async def healthz() -> dict:  # async: answers even when every worker thread is busy
     return {"ok": True}
