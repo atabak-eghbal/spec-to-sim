@@ -156,13 +156,12 @@ CARD_CSS = """<style>
 def card_pages():
     d = lambda s: f'style="animation-delay:{s}s"'
     return {
-        "b_problem": (14.8, f"""<div class="pad"><span class="label rise" {d(0.1)}>Physical AI · Nebius × NVIDIA Global AI Hackathon</span>
-<h1 class="rise" {d(0.3)}>Spec-to-Sim</h1>
-<p class="lede rise" {d(0.6)}>Describe a robot task in plain English. Get a working, checked simulation, an AI that repairs its own failures, and training data.</p>
+        "b_problem": (14.8, f"""<div class="pad"><span class="label rise" {d(0.1)}>The problem</span>
+<h2 class="rise" {d(0.3)} style="font-size:72px">Robot test scenes are built by hand</h2>
 <div class="row" style="margin-top:14px"><div class="col rise" {d(2.0)}><span class="label" style="color:#ec8a72">Today, by hand</span>
 <p style="margin-top:18px">Measure objects · write scene files · place everything · write success checks · debug. <b>Days per scene.</b></p></div>
 <div class="col rise" {d(6.5)}><span class="label" style="color:#6fc38f">Spec-to-Sim</span>
-<p style="margin-top:18px">One sentence → real sizes from the web → scene, motion plan, checked result. <b>About a minute, about a cent.</b></p></div></div>
+<p style="margin-top:18px">One sentence → real sizes from the web → scene, motion plan, checked result. <b>About a minute, typically under a cent.</b></p></div></div>
 <div class="rise" {d(9.0)}>{BADGES}</div></div>"""),
         "h2_lerobot": (6.8, f"""<div class="pad"><span class="label rise" {d(0.1)}>Training data · one click</span>
 <h2 class="rise" {d(0.3)}>20 successful demonstrations, LeRobot format</h2>

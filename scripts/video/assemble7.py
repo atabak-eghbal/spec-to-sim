@@ -178,7 +178,16 @@ def main():
 
     check_lengths(segs, {k: DUR[k] + 0.5 for k in ORDER} | {"k_close": DUR["k_close"] + 1.6})
     flat = [p for _, parts in segs for p in parts]
-    files = [render(p, i, tags.get(p["tag"]), XF if i < len(flat) - 1 else 0.0) for i, p in enumerate(flat)]
+    # Crossfade only where a shot jumps forward within the same footage (a cut-out wait): between
+    # different screens a crossfade leaves two panels on top of each other, so those are hard cuts
+    # (a one-frame "fade").
+    CUT = 1 / FPS
+    fade = [XF if i < len(flat) - 1 and flat[i]["kind"] == "clip" and flat[i + 1]["kind"] == "clip"
+            and flat[i]["src"] == flat[i + 1]["src"] else CUT for i in range(len(flat))]
+    fade[-1] = 0.0
+    # Render each part with a little spare footage beyond its fade, so frame rounding never leaves a
+    # part shorter than the next crossfade's offset (which would end the whole video there).
+    files = [render(p, i, tags.get(p["tag"]), fade[i] + (0.15 if i < len(flat) - 1 else 0.0)) for i, p in enumerate(flat)]
     sr = 24000
     track = np.zeros(int((total + 1) * sr), dtype=np.float32)
     for name, _ in segs:
@@ -196,7 +205,7 @@ def main():
         inputs += ["-i", str(f)]
     last, t_end = "[0:v]", flat[0]["out"]
     for k in range(1, len(files)):
-        chain.append(f"{last}[{k}:v]xfade=transition=fade:duration={XF}:offset={t_end:.3f}[x{k}]")
+        chain.append(f"{last}[{k}:v]xfade=transition=fade:duration={fade[k - 1]:.4f}:offset={t_end:.3f}[x{k}]")
         last, t_end = f"[x{k}]", t_end + flat[k]["out"]
     n = len(files)
     for name, _ in segs:

@@ -13,7 +13,7 @@ SAY = {
     "Nemotron": "[Nemotron](/nˈɛmətɹɑn/)", "Nebius": "[Nebius](/nˈɛbiəs/)",
     "MuJoCo": "[MuJoCo](/mjˈuʤˌOkO/)", "datasheet": "[datasheet](/dˈATəʃˌit/)", "Tavily": "[Tavily](/tˈævᵻli/)", "Rubik's": "[Rubik's](/ɹˈubɪks/)",
     "GR00T": "[GR00T](/ɡɹˈut/)", "Franka": "[Franka](/fɹˈæŋkə/)", "Serverless": "[Serverless](/sˈɜɹvəɹləs/)",
-    "verified": "[verified](/vˈɛɹəfˌId/)", "LeRobot": "[LeRobot](/lə ɹˈObˌɑt/)", "LangSmith": "[LangSmith](/lˈæŋ smˈɪθ/)",
+    "verified": "[verified](/vˈɛɹəfˌId/)", "NumPy": "[NumPy](/nˈʌmpˌI/)", "LeRobot": "[LeRobot](/lə ɹˈObˌɑt/)", "LangSmith": "[LangSmith](/lˈæŋ smˈɪθ/)",
 }
 
 
@@ -37,7 +37,8 @@ SEGMENTS = {
                 "weight wins: it's really eight. Still too wide for the gripper, so Spec-to-Sim stops in seconds and says why.",
     "e_repair": "When a plan fails, it repairs itself. In an earlier run of the same task, the can was let go too high "
                 "and fell over. Code measures it, and Super V L watches the frames and explains why. Then Super writes "
-                "three repairs, the simulator tests each one in seconds, and the best one runs. Attempt two passes.",
+                "three repairs, and the simulator is the judge: it tests each one in seconds, and the best one runs. "
+                "Attempt two passes.",
     "f_robust": "Robust, or lucky? Every success is re-run sixteen times: objects moved, heavier, more slippery, and the "
                 "robot's view half a centimetre off. Good plans pass almost every time; a fragile one passes once. "
                 "And you can try to break it yourself: drag an object, or change its size or weight, and re-run.",
@@ -46,11 +47,11 @@ SEGMENTS = {
     "h_data": "One click turns a solved task into training data: twenty demonstrations in the LeRobot format. We trained "
               "a small policy on them and tested it on the same sixteen variations. It matches the plan on a simple "
               "stack, but drops to four of sixteen on the tennis ball. That's what a test is for.",
-    "i_fit": "And every export is that test. The scene, the same random variations, and the same goal checks, in one "
-             "file that only needs MuJoCo. Bring your own policy, and get its score.",
-    "j_rigor": "On fifteen prompts it had never seen, ninety-three percent succeed, for about half a cent each. When "
-               "the data showed the biggest model wasn't helping, we cut it. We publish the weak spots too, and every "
-               "call is traced in LangSmith.",
+    "i_fit": "And every export is that test: the scene, the same random variations, and the same goal checks, in a "
+             "small package that needs only MuJoCo and NumPy. Bring your own policy, and get its score.",
+    "j_rigor": "On fifteen held-out prompts, forty-two of forty-five runs succeed, typically for under a cent. When the "
+               "data showed the biggest model wasn't helping, we cut it: three cheap repairs, checked by the simulator, "
+               "do as well. We publish the weak spots too, and every call is traced in LangSmith.",
     "k_close": "Spec-to-Sim. Describe it. Simulate it. Test it.",
 }
 

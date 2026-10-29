@@ -51,7 +51,7 @@ CARDS = {
 <div class="bar"><span style="width:100%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">16 / 16</div></div>
 <div><div class="mono" style="font-size:30px;color:#b9c7d2">Soda can left of the cube, the live run</div>
 <div class="bar"><span style="width:81.25%;background:#6fc38f"></span></div><div class="big" style="color:#6fc38f">13 / 16</div></div>
-<div><div class="mono" style="font-size:30px;color:#b9c7d2">Fruit sorting: passed once, but the soda can barely stays standing</div>
+<div><div class="mono" style="font-size:30px;color:#b9c7d2">An earlier fruit-sorting plan: passed once, soda can barely stays standing</div>
 <div class="bar"><span style="width:6.25%;background:#ec8a72"></span></div><div class="big" style="color:#ec8a72">1 / 16</div></div></div>""",
     "f4_export": """<div class="pad"><span class="label">Export scene</span><h2>Every scene is reusable</h2>
 <div class="row"><pre style="flex:0 0 640px">spec2sim-run.zip
@@ -67,16 +67,16 @@ robot.attach(objects, frame=robot.worldbody.add_frame(),
              prefix="task/")
 model = robot.compile()   # test your own policy</pre></div>
 <p class="lede" style="font-size:32px">Success checks use NVIDIA RoboLab's vocabulary: object_on_top, object_in_container, object_left_of…</p></div>""",
-    "g2_eval": """<div class="pad" style="gap:24px"><span class="label">Batch evaluation · scripts/eval.py · 104 runs, one commit, 3 per prompt</span><h2>93 % on prompts it had never seen</h2>
+    "g2_eval": """<div class="pad" style="gap:24px"><span class="label">Batch evaluation · scripts/eval.py · 104 runs, one commit, 3 per prompt</span><h2>42 of 45 runs pass on 15 held-out prompts</h2>
 <table>
 <tr><td><b>15 held-out prompts</b>, written before any was run</td><td class="ok">42 / 45</td></tr>
 <tr><td>11 development prompts</td><td class="ok">29 / 33</td></tr>
-<tr><td>Model cost per task (median)</td><td class="ok">$0.005</td></tr>
-<tr><td>Cut: Ultra escalation (fixed 4 of 18 runs)</td><td class="ok" style="color:#e2b55c">→ 3 Super repairs, tested in sim</td></tr>
+<tr><td>Model cost per task (median)</td><td class="ok">$0.004</td></tr>
+<tr><td>Cut: Ultra escalation (fixed 4 of the 10 runs sent to it)</td><td class="ok" style="color:#e2b55c">→ 3 Super repairs, tested in sim</td></tr>
 <tr><td>Vision model: Critic and scene check</td><td class="ok" style="color:#e2b55c">no measurable gain yet</td></tr>
 <tr><td>Weak spot: pushing things over</td><td class="bad">4 / 6</td></tr>
-</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Everything above is in docs/eval.md.</p></div>""",
-    "i_harness": """<div class="pad" style="gap:30px"><span class="label">Every export is a policy test</span><h2>Bring your policy. Get its score.</h2>
+</table><p class="mono" style="font-size:24px;color:#9aabb8">Pass/fail decided by code, never by a model. Round 2 of 2; caveats and every number in docs/eval.md.</p></div>""",
+    "i_harness": """<div class="pad" style="gap:30px"><span class="label">Every export is a policy test · mujoco + numpy</span><h2>Bring your policy. Get its score.</h2>
 <div class="row"><pre style="flex:0 0 720px">export.zip
 ├── scene_objects.xml   MuJoCo MJCF
 ├── task.json           goals + sources
@@ -91,7 +91,7 @@ left_of soda_can -> rubiks_cube  0/20
 upright soda_can                20/20
 
 Overall success: 0/20 = 0.0 %
-# baseline policy: holds still</pre></div>
+# a do-nothing policy scores 0, as it should</pre></div>
 <p class="lede" style="font-size:32px">Same randomization, same goal checks as the stress test, in one file.</p></div>""",
 }
 
@@ -125,7 +125,7 @@ CHAPTERS = {"b_problem": ("", "The problem"), "c_live": ("1", "A live run"), "d_
 def chapter(num: str, title: str) -> str:
     n = f'<span style="font:600 30px/1 IBM Plex Mono;color:#0d1318;background:#7fb0e0;border-radius:6px;padding:8px 13px;margin-right:18px">{num}</span>' if num else ""
     return f"""<style>body{{background:transparent!important}}</style>
-<div style="position:absolute;left:56px;top:48px;display:flex;align-items:center;background:rgba(10,15,20,0.82);
+<div style="position:absolute;left:56px;bottom:56px;display:flex;align-items:center;background:rgba(10,15,20,0.82);
 border:1px solid rgba(127,176,224,0.45);border-left:6px solid #7fb0e0;border-radius:10px;padding:16px 26px">{n}
 <span style="font:700 40px/1 Archivo;font-stretch:85%;color:#fff">{title}</span></div>"""
 
