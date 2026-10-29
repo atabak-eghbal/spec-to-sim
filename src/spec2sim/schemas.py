@@ -5,6 +5,7 @@ meters, kilograms, seconds. World frame: robot base at origin, +x forward, +z up
 """
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -69,6 +70,20 @@ class TaskSpec(BaseModel):
     @model_validator(mode="after")
     def _goals_reference_objects(self) -> TaskSpec:
         """Every goal must name declared objects; a bad reference goes back to the model to fix."""
+        # The floor is the table. A planned "table" can never be built (it is too big for the scene)
+        # and once made every repair fail, so it is dropped here, with goals that only restate "on the table".
+        surface = re.compile(r"^(\w+_)?(table|tabletop|table_top|floor|ground|desk|countertop|counter|workbench|work_surface)$")
+        flat = {o.name for o in self.objects if surface.match(o.name.lower()) and o.shape == "box"}
+        if flat:
+            self.objects = [o for o in self.objects if o.name not in flat]
+            self.goals = [g for g in self.goals if g.obj not in flat and g.target not in flat]
+        for o in self.objects:
+            if not re.fullmatch(r"[a-z][a-z0-9_]{0,40}", o.name):
+                raise ValueError(f"object name {o.name!r} must be a non-empty snake_case id like 'red_block'")
+        if len({o.name for o in self.objects}) != len(self.objects):
+            raise ValueError("object names must be unique")
+        if not self.goals:
+            raise ValueError("the task needs at least one goal")
         for o in self.objects:  # a "rubiks_cube" once came back as a black cylinder
             if any(w in o.name.lower() for w in ("cube", "block", "brick", "box")) and o.shape not in ("box", "bin", "drawer"):
                 raise ValueError(f"'{o.name}' sounds box-shaped but has shape '{o.shape}'; use shape 'box'")
@@ -168,16 +183,25 @@ class SceneObject(BaseModel):
 class Action(BaseModel):
     """One step of the motion plan, executed by our fixed controller.
 
-    move_to: move the gripper's tool point to `xyz`, or to an object's *current* center plus
-    `offset` when `object` is given. Gripper always points down; `yaw` rotates it about z.
+    Skills (preferred): code computes the waypoints at run time from the objects' real sizes and
+    where they are now, including how the held object actually sits in the hand.
+      pick: grasp `object` at its center and lift it clear of everything.
+      place_on: set the held object down on `target` (`offset` dx, dy = where on its top), let go.
+      drop_into: lower the held object into bin `target` (`offset` dx, dy = spot in the bin), let go.
+      push: knock `object` over or slide it, pushing toward `direction`.
+    Primitives (for drawers and anything else): move_to moves the tool point to `xyz`, or to an
+    object's *current* center plus `offset`; open / close the gripper; wait.
+    The gripper always points down; `yaw` rotates it about z.
     """
 
-    op: Literal["move_to", "open", "close", "wait"]
+    op: Literal["pick", "place_on", "drop_into", "push", "move_to", "open", "close", "wait"]
     object: str | None = None
+    target: str | None = Field(None, description="place_on / drop_into: where the held object goes")
+    direction: Literal["+x", "-x", "+y", "-y"] | None = Field(None, description="push only")
     offset: Vec3 = (0.0, 0.0, 0.0)
     xyz: Vec3 | None = None
     yaw: float = 0.0
-    duration: float = Field(1.0, description="seconds for this step", ge=0.1, le=3.0)
+    duration: float = Field(1.0, description="seconds for this step (primitives only)", ge=0.1, le=3.0)
 
 
 class MotionPlan(BaseModel):
@@ -213,6 +237,13 @@ class RunResult(BaseModel):
 
 
 # ---------- 5. Critic ----------
+class SceneReview(BaseModel):
+    """The vision model's check of the built scene before the robot moves."""
+    what_i_see: str = Field(description="what the two renders show, briefly")
+    problems: list[str] = Field(description="concrete problems that would stop the task, empty if none")
+    ok: bool = Field(description="true if the scene can carry out the task as written")
+
+
 class Critique(BaseModel):
     # Field order matters: the model first says what it SEES, then quotes the measurements, then decides.
     what_happened: str = Field(description="what the frames show, frame by frame where it matters: where the gripper "

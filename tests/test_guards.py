@@ -46,6 +46,27 @@ def test_too_wide_object_is_infeasible_before_building():
                                            ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
     assert "7.8 cm usable" in infeasible(task, facts(0.083))[0]
     assert infeasible(task, facts(0.07)) is None
+    # One web source says 8.3 cm but the typical size (7 cm) fits and no second source agrees: try it.
+    one = GroundedFacts(facts=[ObjectFact(name="apple", size=(0.083,) * 3, mass=0.2, source_url="http://s", sources_agree=1),
+                               ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
+    assert infeasible(task, one) is None
+
+
+def test_planner_table_dropped_and_names_checked():
+    objs = lambda names: [ObjectSpec(name=n, description=n, shape="box", color="red", approx_size_cm=(5, 5, 5)) for n in names]
+    t = TaskSpec(summary="knock it over", objects=objs(["soda_can", "table"]),
+                 goals=[Goal(type="toppled", obj="soda_can"), Goal(type="on", obj="soda_can", target="table")][:1],
+                 search_queries=["q"])
+    assert [o.name for o in t.objects] == ["soda_can"]
+    with pytest.raises(ValidationError, match="snake_case"):
+        TaskSpec(summary="bad names", objects=objs(["", "apple"]), goals=[Goal(type="lifted", obj="apple")], search_queries=["q"])
+
+
+def test_web_size_oriented_like_the_estimate():
+    from spec2sim.grounder import _Extracted, _to_fact
+    e = _Extracted(name="soda_can", quote="123 x 123 x 66 mm", source_url="http://s", size_mm=(123, 123, 66), mass_g=380, note="")
+    f = _to_fact(e, "cylinder", prior_cm=(6.6, 6.6, 12.2), material="metal")
+    assert abs(f.size[0] - 0.066) < 1e-6 and abs(f.size[2] - 0.123) < 1e-6
 
 
 def test_goal_already_true_at_start_is_rejected(tmp_path: Path):

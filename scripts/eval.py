@@ -60,7 +60,7 @@ HELDOUT = [
 
 def one(suite: str, difficulty: str, prompt: str, rep: int, use_critic: bool = True) -> dict:
     t0, run_id, last, first_ok = time.time(), None, {}, None
-    log, tavily, stress = None, 0, None
+    log, tavily, stress, scene_ok = None, 0, None, None
     try:
         for ev in run_task(prompt, use_critic=use_critic):
             if ev["type"] == "start":
@@ -74,6 +74,8 @@ def one(suite: str, difficulty: str, prompt: str, rep: int, use_critic: bool = T
             if ev["type"] == "step" and ev["step"] == "grounder" and ev["status"] == "done":
                 t = ev.get("tavily") or {}
                 tavily = len(t.get("queries", [])) - t.get("cached", 0) + len(t.get("physics_searched", []))
+            if ev["type"] == "step" and ev["step"] == "scenecheck" and ev["status"] == "done":
+                scene_ok = (ev.get("data") or {}).get("ok")
             if ev["type"] == "step" and ev["step"] == "stress" and ev["status"] == "done":
                 stress = [ev["data"]["passed"], ev["data"]["trials"]]
             last = ev
@@ -87,7 +89,7 @@ def one(suite: str, difficulty: str, prompt: str, rep: int, use_critic: bool = T
     passed = refused if difficulty == "refuse" else bool(last.get("success"))
     return {"suite": suite, "critic": use_critic, "difficulty": difficulty, "prompt": prompt, "rep": rep, "run_id": run_id,
             "success": passed, "first_try": refused if difficulty == "refuse" else bool(first_ok),
-            "stress": stress, "tavily_uncached": tavily,
+            "stress": stress, "tavily_uncached": tavily, "scene_ok": scene_ok,
             "attempts": last.get("attempts"), "infeasible": last.get("infeasible"),
             "cost_usd": last.get("total_cost_usd", 0.0), "wall_s": round(time.time() - t0, 1), "error": err}
 
@@ -134,6 +136,15 @@ def summarize(rows: list[dict]) -> str:
                          f"{sum(r.get('tavily_uncached') or 0 for r in rs)}"
                          + (f"; stress test {sum(a for a, _ in st)}/{sum(b for _, b in st)} perturbed re-runs passed"
                             if st else ""))
+    # Does the vision scene check (before the robot moves) predict whether attempt 1 fails?
+    sc = [r for r in rows if r.get("scene_ok") is not None]
+    if sc:
+        flag_fail = sum(1 for r in sc if r["scene_ok"] is False and not r["first_try"])
+        flag_ok = sum(1 for r in sc if r["scene_ok"] is False and r["first_try"])
+        pass_fail = sum(1 for r in sc if r["scene_ok"] and not r["first_try"])
+        pass_ok = sum(1 for r in sc if r["scene_ok"] and r["first_try"])
+        lines += ["", (f"- **Vision scene check vs attempt 1:** flagged and attempt 1 failed {flag_fail}; flagged but it "
+                       f"passed {flag_ok}; said ok but it failed {pass_fail}; said ok and it passed {pass_ok} (of {len(sc)})")]
     errs = [r for r in rows if r["error"]]
     if errs:
         lines += ["", "Crashed runs (counted as failures):"] + [f"- {r['prompt']}: {r['error']}" for r in errs]

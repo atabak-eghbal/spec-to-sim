@@ -19,6 +19,7 @@ from spec2sim.sim.scene import BIN_WALL, OBJ_PREFIX, SceneError, build_scene
 
 CTRL_DT = 0.01  # seconds between IK/control updates
 SETTLE_START, SETTLE_END = 0.3, 0.8
+HAND_BELOW_TCP = 0.038  # lowest point of the Panda hand body above the tool point, m
 GRIP_SETTLE = 0.15  # s after a close before the grasp is judged
 MAX_SIM_TIME = 32.0  # room for 4-5 pick-and-place moves
 
@@ -79,8 +80,96 @@ class _Sim:
     def event(self, msg: str) -> None:
         self.events.append(f"t={self.d.time:.1f}s {msg}")
 
+    # ---------- skills: waypoints computed in code from real sizes and current poses ----------
+    def _top(self, name: str) -> float:
+        o = self.scene.objects[name]
+        return float(self.d.body(OBJ_PREFIX + name).xpos[2]) + o.size[2] / 2
+
+    def _clear_z(self, held_h: float, skip: str | None = None) -> float:
+        """Tool-point height that carries an object of height held_h 6 cm above everything else."""
+        tops = [self._top(n) for n in self.scene.objects if n != skip and self.scene.objects[n].shape != "drawer"]
+        return max(tops + [0.0]) + 0.06 + held_h / 2
+
+    def _mv(self, xyz, yaw: float, dur: float) -> None:
+        self.do(Action(op="move_to", xyz=tuple(float(v) for v in xyz), yaw=yaw, duration=dur))
+
+    def skill(self, a: Action) -> None:
+        ctl, objs = self.ctl, self.scene.objects
+        for ref in (a.object, a.target):
+            if ref is not None and ref not in objs:
+                raise IKError(f"{a.op}: unknown object '{ref}'")
+        if a.op == "pick":
+            if a.object is None:
+                raise IKError("pick needs 'object'")
+            o = objs[a.object]
+            c = ctl.object_pos(a.object)
+            self._mv(c + [0, 0, max(0.12, o.size[2] / 2 + 0.08)], a.yaw, 1.0)
+            g = ctl.object_pos(a.object)
+            # Tall objects are gripped high: the hand body sits HAND_BELOW_TCP above the fingertips.
+            g[2] = max(g[2], g[2] + o.size[2] / 2 - HAND_BELOW_TCP - 0.008)
+            self._mv(g, a.yaw, 0.6)
+            self.do(Action(op="close", duration=0.4))
+            if ctl.held != a.object:
+                return  # the close event already says what happened
+            p = ctl.tcp_pos()
+            self._mv([p[0], p[1], max(p[2] + 0.1, self._clear_z(o.size[2], a.object))], a.yaw, 0.8)
+            return
+        if a.op in ("place_on", "drop_into"):
+            held = ctl.held
+            if held is None or a.target is None:
+                raise IKError(f"{a.op} needs a held object and a 'target' (pick something first)")
+            h = objs[held].size[2]
+            t = objs[a.target]
+            tc = ctl.object_pos(a.target)
+            # How the object actually sits in the hand: aim the OBJECT, not the tool point.
+            grip = ctl.tcp_pos() - self.d.body(OBJ_PREFIX + held).xpos
+            xy = tc[:2] + np.array(a.offset[:2])
+            if a.op == "place_on":
+                rest = self._top(a.target) + h / 2 + 0.003
+            else:
+                if t.shape != "bin":
+                    raise IKError(f"drop_into needs a bin target, '{a.target}' is a {t.shape}")
+                floor = float(tc[2]) - t.size[2] / 2 + BIN_WALL
+                rim = float(tc[2]) + t.size[2] / 2
+                # Lower as deep as the hand can go without its body touching the rim.
+                rest = max(floor + h / 2 + 0.005, rim + 0.012 - HAND_BELOW_TCP - grip[2])
+            carry = max(self._clear_z(h, held), rest + grip[2] + 0.08)
+            p = ctl.tcp_pos()
+            self._mv([p[0], p[1], carry], a.yaw, 0.5)
+            self._mv([xy[0] + grip[0], xy[1] + grip[1], carry], a.yaw, 1.0)
+            self._mv([xy[0] + grip[0], xy[1] + grip[1], rest + grip[2]], a.yaw, 0.8)
+            self.do(Action(op="open", duration=0.3))
+            q = ctl.tcp_pos()
+            self._mv([q[0], q[1], q[2] + 0.12], a.yaw, 0.6)
+            return
+        if a.op == "push":
+            if a.object is None or a.direction is None:
+                raise IKError("push needs 'object' and 'direction'")
+            o = objs[a.object]
+            c = ctl.object_pos(a.object)
+            ax = {"+x": (1, 0), "-x": (-1, 0), "+y": (0, 1), "-y": (0, -1)}[a.direction]
+            d = np.array([ax[0], ax[1], 0.0])
+            half = (o.size[0] if ax[0] else o.size[1]) / 2
+            bottom = float(c[2]) - o.size[2] / 2
+            z = bottom + 0.8 * o.size[2]  # high on the object: tips it rather than sliding it
+            start = c - d * (half + 0.06)
+            start[2] = z
+            yaw = 1.5708 if ax[0] else 0.0  # fingers across the push direction: the closed fingertips lead
+            self.do(Action(op="close", duration=0.3))
+            self._mv(start + [0, 0, 0.12], yaw, 0.8)
+            self._mv(start, yaw, 0.6)
+            end = c + d * (half + 0.12)
+            end[2] = z
+            self._mv(end, yaw, 0.45)
+            self._mv(end + [0, 0, 0.12], yaw, 0.5)
+            return
+        raise IKError(f"unknown skill '{a.op}'")
+
     def do(self, a: Action) -> None:
         ctl = self.ctl
+        if a.op in ("pick", "place_on", "drop_into", "push"):
+            self.skill(a)
+            return
         if a.op == "wait":
             self.hold(a.duration)
         elif a.op in ("open", "close"):
@@ -305,3 +394,46 @@ def stress_test(build: Build, goals: list[Goal], trials: int = 16, seed: int = 0
                              "mass_pct": mass_scale * 100, "friction_pct": friction_scale * 100,
                              "sensing_cm": sense_error * 100},
             "rows": rows, "seconds": round(time.time() - t0, 1)}
+
+
+# ---------- before the run: a picture of the scene, and a fast physics-only score ----------
+def snapshot(build: Build, path: Path, allowed: set[str] | None = None, physics: dict | None = None) -> str | None:
+    """The scene as built, before the robot moves: two views side by side (front and top) as one JPG,
+    for the vision model's scene check. None if the scene is invalid."""
+    from PIL import Image
+
+    from spec2sim.sim.render import RENDER_H, RENDER_W
+    try:
+        sim = _Sim(build, None, allowed, physics=physics)
+    except SceneError:
+        return None
+    sim.hold(SETTLE_START)
+    r = mujoco.Renderer(sim.m, height=RENDER_H, width=RENDER_W)
+    views = []
+    for lookat, dist, az, el in (((0.45, 0.0, 0.1), 1.25, 150, -25), ((0.5, 0.0, 0.0), 1.15, 180, -88)):
+        cam = mujoco.MjvCamera()
+        cam.lookat[:], cam.distance, cam.azimuth, cam.elevation = lookat, dist, az, el
+        r.update_scene(sim.d, cam)
+        views.append(Image.fromarray(r.render()))
+    r.close()
+    sheet = Image.new("RGB", (RENDER_W * 2, RENDER_H))
+    for i, v in enumerate(views):
+        sheet.paste(v, (i * RENDER_W, 0))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(path, quality=85)
+    return str(path)
+
+
+def quick_score(build: Build, goals: list[Goal], allowed: set[str] | None = None,
+                physics: dict | None = None) -> dict:
+    """Run a plan physics-only (no rendering, no model calls) and score it, to pick the best of
+    several repair candidates: success first, then goals passed, then total miss distance."""
+    try:
+        sim = _Sim(build, None, allowed, physics=physics)
+    except SceneError as e:
+        return {"ok": False, "passed": -1, "miss_m": 9.0, "error": str(e)[:200]}
+    err = _execute(sim, build)
+    res = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
+    return {"ok": err is None and all(r.ok for r in res), "passed": sum(r.ok for r in res),
+            "miss_m": round(sum(r.error_m for r in res), 4), "error": (err or "")[:200],
+            "failed": [r.detail for r in res if not r.ok][:3]}

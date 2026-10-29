@@ -176,6 +176,16 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
     """Convert mm/g to SI and sanity-check size against the Planner's prior and mass against volume."""
     size = tuple(v / 1000 for v in e.size_mm)
     mass = e.mass_g / 1000
+    if prior_cm and all(v > 0 for v in prior_cm) and min(size) > 0:
+        # Web pages list dimensions in any order ("12.3 x 6.6 x 6.6 cm"). Orient them like the Planner's
+        # estimate: the web's smallest value goes where the estimate is smallest, and so on. A soda
+        # can once came back as 12.3 x 12.3 x 6.6 (lying down) and was refused as too wide to grip.
+        order = sorted(range(3), key=lambda i: prior_cm[i])
+        web = sorted(size)
+        oriented = [0.0, 0.0, 0.0]
+        for rank, i in enumerate(order):
+            oriented[i] = web[rank]
+        size = tuple(oriented)
     if shape in ("cylinder", "sphere"):
         # Nano sometimes scrambles the order, e.g. a can as [122, 66, 122]. A round object's
         # diameter is its smaller horizontal value (spheres: all three equal the diameter).

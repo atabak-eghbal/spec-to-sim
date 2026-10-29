@@ -10,7 +10,7 @@ from langsmith import traceable
 
 from spec2sim import config
 from spec2sim.llm import CallStat, chat_json
-from spec2sim.schemas import Build, Critique, RunResult, TaskSpec
+from spec2sim.schemas import Build, Critique, RunResult, SceneReview, TaskSpec
 
 SYSTEM = """You are a robotics simulation reviewer. You see a contact sheet of 8 frames (left to
 right, top to bottom, timestamped) from a MuJoCo simulation of a Franka Panda arm, plus the
@@ -70,3 +70,21 @@ def measured_only(result: RunResult, simulated: bool) -> Critique:
                     what_happened="(no video review: measured results only)",
                     root_cause="See the failed goals and sim events in the evidence.",
                     suggested_fix="Change the scene or plan so every failed goal passes, using the measured numbers.")
+
+
+SCENE_SYSTEM = """You check a robot simulation scene BEFORE the robot moves. You see two renders of the
+scene as built (left: from the front-side, right: from straight above; the white arm is a Franka
+Panda at the origin), the task, and the object list. Decide whether this scene can carry out the
+task as written. Look for: objects missing, extra or the wrong colour; objects floating, sunk into
+the floor or overlapping; a container too small for what must go in it; an object already where it
+should end up; something blocking the robot. Describe what you see first. Report only problems you
+can see or that follow from the listed sizes; if the scene looks right, say ok. JSON only."""
+
+
+@traceable(name="scene_check")
+def scene_check(task: TaskSpec, b: Build, image: str) -> tuple[SceneReview, list[CallStat]]:
+    user = (f"TASK: {task.summary}\nGOALS: {[g.model_dump(exclude_none=True) for g in task.goals]}\n"
+            "OBJECTS (name, shape, size m, position m): "
+            + "; ".join(f"{o.name} {o.shape} {list(o.size)} @ {list(o.pos)}" for o in b.objects))
+    return chat_json("scene_check", config.VL, SCENE_SYSTEM, user, SceneReview, images=[image],
+                     max_tokens=1500, temperature=0.1, thinking=False)

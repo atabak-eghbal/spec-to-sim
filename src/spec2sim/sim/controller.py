@@ -19,6 +19,7 @@ from spec2sim.sim.scene import BIN_WALL, DRAWER_PULL, DRAWER_TRAVEL, OBJ_PREFIX,
 HOME_Q = np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853])
 GRIP_OPEN, GRIP_CLOSED = 255.0, 0.0
 MAX_GRASP_WIDTH = 0.078  # Panda fingers open 8 cm; 1 mm clearance per side
+ONE_PAD_SLACK = 0.006  # gap may exceed the object's width by this much with one pad touching
 MIN_FINGER_GAP = 0.002  # fingers must be stopped at least this far apart (closed on air = 0)
 
 
@@ -174,7 +175,10 @@ class Controller:
                 reason = (f"{name} is {width * 100:.1f} cm wide across the fingers; the Panda gripper opens "
                           f"8.0 cm ({MAX_GRASP_WIDTH * 100:.1f} cm usable)")
                 continue
-            if len(sides) < 2:
+            if len(sides) < 2 and gap - width > ONE_PAD_SLACK:
+                # One pad touching is still a grasp when the fingers have closed to the object's width
+                # (it is between them): Menagerie's finger motor is far weaker than the real 70 N, so
+                # it can't slide a heavy object to the middle. Beside an object, the fingers close to 0.
                 reason = f"only the {next(iter(sides))} finger touched {name}: it was not between the fingers"
                 continue
             if gap < MIN_FINGER_GAP:

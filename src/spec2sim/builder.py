@@ -1,4 +1,4 @@
-"""Step 3 - Builder (Nemotron 3 Super) and repair (Super, or Ultra when escalated).
+"""Step 3 - Builder and repair (Nemotron 3 Super).
 
 Produces a `Build`: the objects to place (data, not XML) and the motion plan our fixed
 controller executes. `repair()` takes the failed Build plus the Runner's metrics and the Critic's
@@ -44,50 +44,37 @@ floor of the part of the drawer that is out of the cabinet: drop objects there).
 for the drawer's name.
 OBJECTS MAY START STACKED (e.g. a tower to knock over): pos z = (height of what is below) + size_z/2.
 
-ACTIONS (executed in order):
-- {{"op":"move_to","object":NAME,"offset":[dx,dy,dz]}} move TCP to NAME's CURRENT center + offset
-- {{"op":"move_to","xyz":[x,y,z]}}  move TCP to a world point
-- {{"op":"close"}} close gripper; the object is grasped only if it is BETWEEN the fingers (both finger
-  pads touch it): put the TCP at the object's center height, centered on it. Closing above or beside
-  an object grasps nothing
-- {{"op":"open"}}  open gripper; the held object is released
+ACTIONS (executed in order). Prefer SKILLS: code turns them into waypoints from the real sizes and
+the objects' current positions, so you never compute heights:
+- {{"op":"pick","object":A}}                      grasp A at its center and lift it clear of everything
+- {{"op":"place_on","target":B,"offset":[dx,dy,0]}} set the held object down on top of B (dx,dy = spot on B's top, usually 0) and let go
+- {{"op":"drop_into","target":BIN,"offset":[dx,dy,0]}} lower the held object into the bin and let go; give each object its own
+  spot (dx,dy a few cm apart, inside the bin) so they don't land on each other
+- {{"op":"push","object":A,"direction":"+x"|"-x"|"+y"|"-y"}} knock A over (or slide it) toward that direction; for a stack, push the TOP object
+Primitives, only for drawers or anything the skills can't do:
+- {{"op":"move_to","object":NAME,"offset":[dx,dy,dz]}} move the tool point to NAME's CURRENT center + offset
+- {{"op":"move_to","xyz":[x,y,z]}}  move the tool point to a world point
+- {{"op":"close"}} close the gripper; an object is grasped only if it is BETWEEN the fingers (tool point at
+  its center height, centered on it)
+- {{"op":"open"}}  open the gripper; the held object is released
 - {{"op":"wait"}}
-Each action has "duration" in seconds (0.3-1.5 typical). Total plan under 30 s: about 5.5 s per
-pick-and-place. Set unused fields
-to null (object, xyz) or defaults (offset [0,0,0], yaw 0).
+Primitives take "duration" in seconds (0.3-1.5 typical). Skills ignore duration. `yaw` (radians)
+turns the gripper (skills too); set unused fields to null (object, target, direction, xyz) or
+defaults (offset [0,0,0], yaw 0). Total plan under 30 s (a pick + place is about 5 s).
 
-RELIABLE PICK-AND-PLACE PATTERN (A onto B, both resting on the floor):
-1. move_to A offset [0,0,0.12]          (approach from above, 1.0 s)
-2. move_to A offset [0,0,0]             (TCP at A's center, 0.6 s)
-3. close                                (0.4 s)
-4. move_to A offset [0,0,0.15]          (lift, 0.7 s)
-5. move_to B offset [0,0,h_B/2 + h_A/2 + 0.15]   (carry above B, 1.0 s)
-6. move_to B offset [0,0,h_B/2 + h_A/2 + 0.003]  (lower until A's bottom touches B's top, 0.6 s)
-7. open                                 (0.3 s)
-8. move_to B offset [0,0,0.2]           (retreat, 0.6 s)
-Here h_A, h_B are the objects' heights (size z). Because A was grasped at its center, the TCP
-height above B's center when A is resting on B is h_B/2 + h_A/2. Compute these numbers.
-
-DROP INTO A BIN: same steps 1-4, then
-5. move_to BIN offset [dx,dy,h_bin/2 + h_A/2 + 0.15]  (carry above the bin, 1.0 s)
-6. move_to BIN offset [dx,dy,h_bin/2 + h_A/2 + 0.02]  (A's bottom 2 cm above the rim, 0.6 s)
-7. open, 8. move_to BIN offset [0,0,h_bin/2 + 0.25] (retreat)
-Use a different [dx,dy] (a few cm, inside the bin's inner area) for each object so they don't
-land on each other. Lifting to 0.18 in step 4 keeps the carried object clear of other objects.
+EXAMPLES: A onto B: pick A, place_on B. Into a bin: pick A, drop_into BIN [-0.05,0,0], pick C,
+drop_into BIN [0.05,0,0]. A tower red-green-blue: pick green, place_on red, pick blue, place_on green.
+Knock over: push A toward open space.
 
 OPEN A DRAWER D: move_to D.handle offset [0,0,0.10] (1.0 s); move_to D.handle offset [0,0,0] (0.6 s);
 close (0.4 s); move_to D.open (1.5 s); open (0.3 s); move_to D.handle offset [0,0,0.12] (0.6 s).
 CLOSE IT: the same with D.closed instead of D.open.
-PUT A INTO AN OPEN DRAWER: steps 1-4 of pick-and-place, then move_to D.slot offset
+PUT A INTO AN OPEN DRAWER: pick A, then move_to D.slot offset
 [0,0,h_A/2 + 0.15] with yaw 1.5708 (1.0 s), move_to D.slot offset [0,0,h_A/2 + 0.02] yaw 1.5708
 (0.6 s), open, move_to D.slot offset [0,0,0.2] yaw 1.5708. (yaw 1.5708 keeps the wide hand clear
 of the cabinet top.) Two objects go side by side across the drawer's width: D.slot offsets
 [0,+0.045,...] and [0,-0.045,...]. Then close the drawer if the task asks.
 
-KNOCK OVER / PUSH (no grasp): close the gripper first (fingers together, nothing grasped), move_to
-the side of the object opposite to where it should go, at about 60% of its height, 6 cm from its
-surface (0.8 s), then move_to straight through it to 12 cm past its far side at the same height,
-fast (0.4-0.5 s). For a stack, sweep through the TOP object.
 Return JSON only."""
 
 
@@ -104,19 +91,45 @@ def build(task: TaskSpec, facts: GroundedFacts) -> tuple[Build, list[CallStat]]:
 
 REPAIR_ADDENDUM = """
 
-You are REPAIRING a previous attempt that failed. You get the previous scene+plan, the measured
-results (ground truth), sim events, and a vision critic's diagnosis of the video. Fix the root cause
-with the smallest change that makes every goal pass. Do not change object sizes or masses - they
-are real-world facts. Explain the fix in `rationale`."""
+You are REPAIRING a plan that failed. You get every earlier attempt with its measured results
+(ground truth) and sim events, and a vision critic's reading of the last run's video. Fix the root
+cause with the smallest change that makes every goal pass. Do NOT repeat a scene or plan that
+already failed: if a change did not help before, try a different one. Do not change object sizes or
+masses - they are real-world facts. Explain the fix in `rationale`."""
+
+
+def _plan_brief(b: Build) -> str:
+    out = []
+    for a in b.plan.actions:
+        bits = [a.op] + [x for x in (a.object, a.target, a.direction) if x]
+        if any(a.offset):
+            bits.append(f"offset {[round(v, 3) for v in a.offset]}")
+        if a.xyz:
+            bits.append(f"xyz {[round(v, 3) for v in a.xyz]}")
+        if a.yaw:
+            bits.append(f"yaw {a.yaw:g}")
+        out.append(" ".join(bits))
+    return "; ".join(out)
+
+
+def _result_brief(r: RunResult) -> str:
+    return ((f"error: {r.error}\n" if r.error else "")
+            + "\n".join(f"- {'PASS' if g.ok else 'FAIL'}: {g.detail}" for g in r.goals)
+            + ("\nevents: " + " | ".join(r.events[-8:]) if r.events else ""))
 
 
 @traceable(name="repair")
-def repair(task: TaskSpec, facts: GroundedFacts, prev: Build, result: RunResult,
-           critique: Critique, model: config.ModelInfo, attempt: int) -> tuple[Build, list[CallStat]]:
-    user = (_context(task, facts)
-            + f"\n\nPREVIOUS ATTEMPT {attempt} (failed):\n{prev.model_dump_json()}"
-            + f"\n\nMEASURED RESULTS:\nerror: {result.error}\n"
-            + "\n".join(f"- {'PASS' if g.ok else 'FAIL'}: {g.detail}" for g in result.goals)
-            + "\nSIM EVENTS:\n" + "\n".join(f"- {e}" for e in result.events)
+def repair(task: TaskSpec, facts: GroundedFacts, history: list[tuple[Build, RunResult]],
+           critique: Critique, model: config.ModelInfo, attempt: int,
+           temperature: float = 0.3) -> tuple[Build, list[CallStat]]:
+    """history: every attempt so far as (build, result), oldest first; the last one is shown in full."""
+    *older, (prev, result) = history
+    past = "".join(f"\n\nATTEMPT {i + 1} (failed): objects "
+                   + "; ".join(f"{o.name}@{[round(v, 3) for v in o.pos]}" for o in b.objects)
+                   + f"\nplan: {_plan_brief(b)}\n{_result_brief(r)}" for i, (b, r) in enumerate(older))
+    user = (_context(task, facts) + past
+            + f"\n\nLAST ATTEMPT {attempt} (failed), in full:\n{prev.model_dump_json()}"
+            + f"\n\nMEASURED RESULTS:\n{_result_brief(result)}"
             + f"\n\nCRITIC DIAGNOSIS:\n{critique.model_dump_json()}")
-    return chat_json(f"repair#{attempt}", model, SYSTEM + REPAIR_ADDENDUM, user, Build, max_tokens=16000)
+    return chat_json(f"repair#{attempt}", model, SYSTEM + REPAIR_ADDENDUM, user, Build, max_tokens=16000,
+                     temperature=temperature)

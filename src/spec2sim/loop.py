@@ -1,4 +1,4 @@
-"""Orchestration: plan -> ground -> build -> (run -> critique -> repair)* with model escalation.
+"""Orchestration: plan -> ground -> build -> scene check -> (run -> critique -> repair)*.
 
 `run_task` is a generator of plain-dict events (JSON-serializable) so the CLI can print them and
 the FastAPI app can stream them over SSE unchanged.
@@ -6,15 +6,17 @@ the FastAPI app can stream them over SSE unchanged.
 After a success, the plan is stress-tested: re-simulated under random perturbations (start pose,
 mass, friction) with no model calls, like Isaac Lab-Arena's sensitivity analysis.
 
-Escalation policy (docs/architecture.md): attempt 1 is built by Super. After a failure the VL
-Critic diagnoses it; the first repair uses Super, later repairs escalate to Ultra. Max
-MAX_ITERATIONS attempts in total.
+Policy: attempt 1 is built by Super; before it runs, Super VL checks a render of the scene
+(advisory). After a failure the VL Critic diagnoses the video, then REPAIR_CANDIDATES Super repairs
+are generated in parallel, each is simulated physics-only, and the best one runs next. (Escalating
+to Ultra was dropped after the Oct 28 eval: it fixed 4 of 18 runs.) Max MAX_ITERATIONS attempts.
 """
 from __future__ import annotations
 
 import time
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from langsmith import traceable
@@ -28,11 +30,6 @@ from spec2sim.sim.controller import MAX_GRASP_WIDTH
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNS = ROOT / "runs"
-
-
-def repair_model(attempt_failed: int) -> config.ModelInfo:
-    """Model that repairs after attempt N failed: Super for the first repair, Ultra after."""
-    return config.SUPER if attempt_failed == 1 else config.ULTRA
 
 
 def infeasible(task: TaskSpec, facts: GroundedFacts) -> tuple[str, list[str]] | None:
@@ -55,7 +52,13 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> tuple[str, list[str]] | 
             continue
         sx, sy, _ = f.size
         width = min(sx, sy) if shapes.get(name) == "box" else max(sx, sy)
-        if width > opening:
+        # Refuse only when the evidence agrees: the web size AND the Planner's own typical size are
+        # too wide, or two or more web sources agree on the size. A single odd web number (an orange
+        # listed at 8.9 cm) is not enough to stop a task; the simulator will test the grasp instead.
+        est = next((o.approx_size_cm for o in task.objects if o.name == name), None)
+        est_w = (min(est[:2]) if shapes.get(name) == "box" else max(est[:2])) / 100 if est else None
+        confirmed = (est_w is not None and est_w > opening) or f.sources_agree >= 2 or not f.source_url
+        if width > opening and confirmed:
             origin = ("size implied by its weight from the web" if f.note.startswith("size corrected")
                       else "size from the web" if f.source_url else "estimated size")
             full = robot.gripper_opening_mm / 10 if robot else 8.0
@@ -82,7 +85,7 @@ def _stats(stats: list[CallStat]) -> dict:
 
 @traceable(name="spec2sim_run")
 def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None = None,
-             use_critic: bool = True) -> Iterator[dict]:
+             use_critic: bool = True, use_scene_check: bool = True) -> Iterator[dict]:
     """use_critic=False: repairs get the measured failures only, no VLM review (eval comparison)."""
     run_id = run_id or time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     out = RUNS / run_id
@@ -113,14 +116,28 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
     total_cost += sum(s.cost_usd for s in st)
     yield _ev("step", step="builder", status="done", attempt=1, stats=_stats(st), data=b.model_dump())
 
-    result = None
+    result, history, allowed, physics = None, [], {o.name for o in task.objects}, facts.physics()
     for attempt in range(1, max_it + 1):
         b, notes = fit_furniture(b)
         for n in notes:
             yield _ev("note", message=n)
+        if attempt == 1 and use_scene_check:
+            # The vision model looks at the scene as built, before the robot moves (advisory: it
+            # never blocks a run; the eval measures how often its warnings predict a failure).
+            img = runner.snapshot(b, out / "scene_check.jpg", allowed, physics)
+            if img:
+                yield _ev("step", step="scenecheck", status="running", model=config.VL.label)
+                try:
+                    rev, st = critic.scene_check(task, b, img)
+                    total_cost += sum(s.cost_usd for s in st)
+                    yield _ev("step", step="scenecheck", status="done", stats=_stats(st),
+                              data=rev.model_dump() | {"image": str(Path(img).relative_to(RUNS))})
+                except LLMError as e:
+                    yield _ev("step", step="scenecheck", status="done", data={"error": str(e)[:200]})
         yield _ev("step", step="runner", status="running", attempt=attempt)
-        result = _traced_run(b, task.goals, out / f"attempt{attempt}", {o.name for o in task.objects}, facts.physics())
+        result = _traced_run(b, task.goals, out / f"attempt{attempt}", allowed, physics)
         yield _ev("step", step="runner", status="done", attempt=attempt, data=_public(result, run_id))
+        history.append((b, result))
         if result.success:
             break
         if attempt == max_it:
@@ -138,21 +155,31 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
             yield _ev("step", step="critic", status="done", attempt=attempt, skipped=True,
                       data=crit.model_dump())
 
-        m = repair_model(attempt)
-        yield _ev("step", step="repair", status="running", model=m.label, attempt=attempt + 1,
-                  escalated=m is config.ULTRA)
-        try:
-            b, st = builder.repair(task, facts, b, result, crit, m, attempt)
-        except LLMError as e:
-            if m is config.SUPER:
-                raise
-            # Ultra returned unusable output; one Super repair keeps the run alive.
-            yield _ev("note", message=f"{m.label} reply unusable ({str(e)[:120]}); retrying the repair with {config.SUPER.label}")
-            m = config.SUPER
-            b, st = builder.repair(task, facts, b, result, crit, m, attempt)
-        total_cost += sum(s.cost_usd for s in st)
-        yield _ev("step", step="repair", status="done", attempt=attempt + 1, stats=_stats(st),
-                  escalated=m is config.ULTRA, data=b.model_dump())
+        # Repair: REPAIR_CANDIDATES Super repairs in parallel (different temperatures), each tested in
+        # the simulator physics-only (seconds, no model cost); the best one becomes the next attempt.
+        # This replaced escalating to Ultra, which fixed 4 of 18 runs in the Oct 28 eval.
+        yield _ev("step", step="repair", status="running", model=config.SUPER.label, attempt=attempt + 1,
+                  candidates=config.REPAIR_CANDIDATES)
+        temps = [0.3] + [0.8] * (config.REPAIR_CANDIDATES - 1)
+        with ThreadPoolExecutor(len(temps)) as ex:
+            futs = [ex.submit(builder.repair, task, facts, history, crit, config.SUPER, attempt, t) for t in temps]
+            got, stats, errors = [], [], []
+            for f in futs:
+                try:
+                    cand, st = f.result()
+                    got.append(fit_furniture(cand)[0])
+                    stats += st
+                except LLMError as e:
+                    errors.append(str(e)[:120])
+        if not got:
+            raise LLMError(f"all {len(temps)} repair candidates failed: {errors}")
+        scores = [runner.quick_score(c, task.goals, allowed, physics) for c in got]
+        best = max(range(len(got)), key=lambda i: (scores[i]["ok"], scores[i]["passed"], -scores[i]["miss_m"]))
+        b = got[best]
+        total_cost += sum(s.cost_usd for s in stats)
+        yield _ev("step", step="repair", status="done", attempt=attempt + 1, stats=_stats(stats),
+                  data=b.model_dump(), candidates=[s | {"chosen": i == best} for i, s in enumerate(scores)],
+                  candidate_errors=errors)
 
     if result and result.success and config.STRESS_TRIALS > 0:
         yield _ev("step", step="stress", status="running", trials=config.STRESS_TRIALS)
