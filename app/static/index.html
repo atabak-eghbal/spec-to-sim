@@ -349,6 +349,8 @@ const $ = (id) => document.getElementById(id);
     try { localStorage.setItem("s2s-theme", n); } catch (e) { /* ignore */ }
   };
 })();
+// Links come from model output and web search: only http(s) may become an href or image source.
+const safeUrl = (u) => /^https?:\/\//i.test(String(u || "")) ? u : "#";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const badgeClass = (label) => "b-" + String(label || "code").replace(/\s+/g, "");
 const STEP_NAMES = { planner: "Planner", grounder: "Real-world facts", builder: "Builder", scenecheck: "Scene check", runner: "Simulator", critic: "Critic", repair: "Repair", stress: "Stress test" };
@@ -439,20 +441,20 @@ function stepBody(s) {
           <td class="n">${f.size.map((v, i) => `<input class="ed" data-k="s${i}" type="number" step="0.1" min="1" max="25" value="${cm(v)}">`).join("×")} cm</td>
           <td class="n"><input class="ed" data-k="m" type="number" step="1" min="1" max="3000" value="${Math.round(f.mass * 1000)}"> g</td>
           <td class="n">μ <input class="ed" data-k="f" type="number" step="0.05" min="0.05" max="2" value="${m ? m.friction : ""}"></td></tr>`;
-        return `<tr><td class="thumb">${f.image_url ? `<img src="${esc(f.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</td>
+        return `<tr><td class="thumb">${f.image_url ? `<img src="${esc(safeUrl(f.image_url))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</td>
         <td>${esc(f.name)}${m ? `<div class="sub">${esc(f.material)} · μ ${m.friction} · bounce ${m.restitution}</div>` : ""}</td>
         <td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
-        <td>${f.source_url ? `<a href="${esc(f.source_url)}" target="_blank" rel="noopener">source</a> ` : ""}${conf(f)}</td></tr>`;
+        <td>${f.source_url ? `<a href="${esc(safeUrl(f.source_url))}" target="_blank" rel="noopener">source</a> ` : ""}${conf(f)}</td></tr>`;
       }).join("");
       const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit|not found/.test(f.note || ""))
         .map((f) => `<li><b>${esc(f.name)}</b>: ${esc(f.note)}</li>`).join("");
-      const lnk = (u, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : `<span class="muted">${t === "src" ? "typical" : t}</span>`;
+      const lnk = (u, t) => u ? `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t}</a>` : `<span class="muted">${t === "src" ? "typical" : t}</span>`;
       const phys = (d.materials || []).map((m) => `<tr><td>${esc(m.material)}</td><td class="n">μ ${m.friction} ${lnk(m.friction_source, "src")}</td>
         <td class="n">bounce ${m.restitution} ${lnk(m.restitution_source, "src")}</td></tr>`).join("");
       const r = d.robot;
       const robot = r ? `<p class="mono" style="font-size:.74rem">Franka limits: gripper opens <b>${r.gripper_opening_mm} mm</b> ${lnk(r.gripper_source, "src")} · payload <b>${r.payload_kg} kg</b> · reach <b>${r.reach_mm} mm</b> ${lnk(r.arm_source, "src")}</p>` : "";
       const tv = s.tavily || {};
-      const srcs = (s.sources || []).map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.title)}</a>`).join("");
+      const srcs = (s.sources || []).map((x) => `<a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.title)}</a>`).join("");
       const physSearch = (tv.physics_searched || []).length ? ` + ${tv.physics_searched.length} physics` : "";
       return `<p class="mono" style="font-size:.75rem"><span class="badge b-Tavily">Tavily</span> ${(tv.queries || []).length} searches${physSearch}${tv.cached ? `, ${tv.cached} from cache` : ""} · ${fmtS(tv.latency_s || 0)}</p>
         <div class="tbl-scroll"><table class="facts"><thead><tr><th></th><th>Object</th><th>Real size</th><th>Mass</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -558,12 +560,16 @@ function renderScreen(r) {
       $("pane-a").insertAdjacentHTML("beforeend", verdictHtml(a, state.attempts[a], "before · "));
       $("pane-b").insertAdjacentHTML("beforeend", verdictHtml(b, state.attempts[b], "after · "));
       cmp = { key, left, right };
+      // Start just before the failure (the first release in the failed attempt), so the difference
+      // shows within seconds instead of after the whole approach. Filming mode starts at 0.
+      const rel = (state.attempts[a].events || []).map((e) => e.match(/^t=([\d.]+)s released/)).find(Boolean);
+      if (rel && !qs0.has("clean")) setTimeout(() => { if (cmp && cmp.key === key) right.t = Math.max(0, parseFloat(rel[1]) - 1.2); }, 900);  // right is the clock master
     }
     return;
   }
   if (mode === "3d") {
-    if (cmp) disposeViews();
-    let host = screen.querySelector(".viewer");
+    if (cmp) disposeViews();  // also clears `viewer`; the compare panes' .viewer nodes must not be reused
+    let host = viewer ? screen.querySelector(".viewer") : null;
     if (!host) {
       disposeViews();
       screen.innerHTML = "";
@@ -673,7 +679,7 @@ function renderTimeline() {
   }
   for (const n of state.notes || []) html += `<div class="note">${esc(n)}</div>`;
   if (state.done && state.done.infeasible) {
-    const src = (state.done.infeasible_sources || []).map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener">${i ? "datasheet" : "object source"}</a>`).join(" · ");
+    const src = (state.done.infeasible_sources || []).map((u, i) => `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${i ? "datasheet" : "object source"}</a>`).join(" · ");
     html += `<div class="errbox"><strong>Physically infeasible.</strong> ${esc(state.done.infeasible)} Stopped before building, so no credits were spent on repairs.${src ? `<br><span class="mono" style="font-size:.78rem">Sources: ${src}</span>` : ""}</div>`;
   }
   if (state.error) html += `<div class="errbox">Run stopped: ${esc(state.error)}</div>`;
@@ -739,8 +745,9 @@ function renderStage() {
 
 // Policy report card (scripts/train_policy.py): a small policy trained on this task's generated
 // demos, tested on the same perturbed variants as the scripted plan. Shown when the run has one.
-let policyRun = null, policyData = null;
+let policyRun = null, policyData = null, policyRuns = new Set();  // runs with a report (from /api/examples)
 function renderPolicy() {
+  if (policyRun !== state.runId && !policyRuns.has(state.runId)) { $("policy").hidden = true; return; }
   if (policyRun !== state.runId) {
     policyRun = state.runId; policyData = null; $("policy").hidden = true;
     if (state.runId) fetch(`/media/${encodeURIComponent(state.runId)}/policy_report.json`).then((r) => r.ok ? r.json() : null)
@@ -831,11 +838,33 @@ $("modes").addEventListener("click", (e) => {
 window.addEventListener("simviewer-ready", () => { if (state.selected) renderStage(); });
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-att]");
-  if (b) { state.selected = Number(b.dataset.att); renderStage(); }
+  if (b) { state.selected = Number(b.dataset.att); if (viewMode === "compare") viewMode = "3d"; renderStage(); }
 });
 
 /* ---------- running & replay ---------- */
 function setBusy(b) { $("runbtn").disabled = b; $("runbtn").textContent = b ? "Running…" : "Simulate"; }
+
+// The server replays a run's events from the start on every connection. If the connection drops
+// mid-run (proxy timeout, flaky network), reconnect and skip the events already shown.
+function openStream(runId, retries) {
+  let seen = 0;
+  const skip = state.events.length;
+  source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  source.onmessage = (m) => { if (seen++ >= skip) { onEvent(JSON.parse(m.data)); render(); } };
+  source.addEventListener("end", () => {
+    source.close(); clearInterval(ticker); setBusy(false);
+    // ?attempt=N opens a recorded run on that attempt (e.g. the failed one before a repair).
+    const want = Number(new URL(location).searchParams.get("attempt"));
+    if (want && state.attempts[want]) state.selected = want;
+    render();
+  });
+  source.onerror = () => {
+    source.close();
+    if (state.done || state.error || state.runId !== runId && state.runId) { clearInterval(ticker); setBusy(false); return; }
+    if (retries >= 5) { state.error = "lost the connection to the server; reload the page to see the result"; clearInterval(ticker); setBusy(false); render(); return; }
+    setTimeout(() => { if (!state.done) openStream(runId, retries + 1); }, 2000);
+  };
+}
 
 function follow(runId, live = false) {
   $("banner").hidden = live;
@@ -847,16 +876,7 @@ function follow(runId, live = false) {
   $("screen").innerHTML = `<div class="idle">Waiting for the first attempt…</div>`;
   $("goals").innerHTML = "";
   setBusy(true);
-  source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
-  source.onmessage = (m) => { onEvent(JSON.parse(m.data)); render(); };
-  source.addEventListener("end", () => {
-    source.close(); clearInterval(ticker); setBusy(false);
-    // ?attempt=N opens a recorded run on that attempt (e.g. the failed one before a repair).
-    const want = Number(new URL(location).searchParams.get("attempt"));
-    if (want && state.attempts[want]) state.selected = want;
-    render();
-  });
-  source.onerror = () => { source.close(); clearInterval(ticker); setBusy(false); };
+  openStream(runId, 0);
   ticker = setInterval(render, 250);
   const url = new URL(location); url.searchParams.set("run", runId); history.replaceState(null, "", url);
 }
@@ -881,6 +901,8 @@ $("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shi
 // the 3D style (Basic shapes = plain primitives, the others = realistic objects).
 let pendingStyle = null, catStyle = {};
 fetch("/api/examples").then((r) => r.json()).then((ex) => {
+  policyRuns = new Set((ex.featured || []).filter((f) => f.policy).map((f) => f.run_id));
+  if (state.runId) renderStage();
   const cats = ex.categories || [{ id: "all", label: "Examples", style: "realistic" }];
   catStyle = Object.fromEntries(cats.map((c) => [c.id, c.style]));
   const cat = (x) => x.category || cats[0].id;
