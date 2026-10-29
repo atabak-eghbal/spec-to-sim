@@ -14,7 +14,11 @@ mkdir -p "$STAGE/.cache" "$STAGE/third_party/menagerie"
 cp -R "$ROOT/.cache/physics" "$STAGE/.cache/physics"
 cp -R "$ROOT/third_party/menagerie/franka_emika_panda" "$STAGE/third_party/menagerie/"
 cp "$ROOT/deploy/huggingface/space_app.py" "$STAGE/space_app.py"
-(cd "$ROOT" && uv export --no-dev --no-hashes --no-emit-project --format requirements-txt) > "$STAGE/requirements.txt"
+# Loose bounds from pyproject.toml (the lockfile's exact pins clash with Gradio's own), except MuJoCo,
+# pinned to the locked version so physics and the restitution calibration match what was tested.
+MJ="$(cd "$ROOT" && uv export --no-dev --no-hashes --format requirements-txt | grep -E '^mujoco==' | cut -d' ' -f1)"
+python3 -c "import tomllib,sys; d=tomllib.load(open('$ROOT/pyproject.toml','rb'))['project']['dependencies']; print('\n'.join(x for x in d if not x.startswith('mujoco')))" > "$STAGE/requirements.txt"
+echo "$MJ" >> "$STAGE/requirements.txt"
 printf 'libosmesa6\nlibgl1\nlibglib2.0-0\n' > "$STAGE/packages.txt"
 rm -f "$STAGE/Dockerfile" "$STAGE/.dockerignore"   # a Gradio Space must not look like a Docker one
 { cat <<'HDR'
