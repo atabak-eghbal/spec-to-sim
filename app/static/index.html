@@ -513,7 +513,7 @@ function stepBody(s) {
 // Stage views: "3d" (one attempt), "compare" (first failed attempt beside the final one, same clock
 // and camera), "video" (server MP4). ?view=compare and ?ghost=1 preselect for links and video capture.
 const qs0 = new URL(location).searchParams;
-let viewer = null, cmp = null, viewMode = qs0.get("view") === "compare" ? "compare" : "3d", ghostOn = qs0.get("ghost") !== "0";
+let viewer = null, cmp = null, viewMode = qs0.get("view") === "compare" ? "compare" : "3d", ghostOn = qs0.get("ghost") === "1";  // off unless asked for: the see-through copies read as duplicate objects
 const attemptNums = () => Object.keys(state.attempts).map(Number).filter((n) => n < 1000).sort((a, b) => a - b);
 function compareSet() {
   const nums = attemptNums().filter((n) => state.attempts[n].viz_path);
