@@ -162,9 +162,9 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
   <div class="status">
     <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
     <div><span class="label">Target submit</span><b>08:00 PT</b></div>
-    <div><span class="label">Model spend</span><b>$4.99 / $20 cap</b></div>
+    <div><span class="label">Model spend</span><b>$5.00 / $20 cap</b></div>
     <div><span class="label">Held-out eval</span><b>42 / 45 (93 %)</b></div>
-    <div><span class="label">Tests</span><b>36 / 36 passing</b></div>
+    <div><span class="label">Tests</span><b>42 / 42 passing</b></div>
     <div><span class="label">Repo</span><b>private until submit</b></div>
   </div>
 </header>
@@ -723,6 +723,14 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <div class="dec-body"><dl>
         <dt>Decision</dt><dd>Outcome bar above the 3D view (the task, a one-line verdict, export buttons); setup steps fold away; failure, diagnosis, repair candidates and pass lead with big headlines; 16 stress tiles; editable sizes/masses/friction; refusals drawn as bars; new hero run on the current pipeline. Video v7: title card, chapter labels, crossfades, no overlapping voices.</dd>
         <dt>Why</dt><dd>Design judge: "a developer console with no hierarchy". Your review of v5: jump cuts, two voices at once, no title.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D50</span><span class="dec-title">Live on Hugging Face; two more judge rounds; every claim audited</span><span class="dec-area">ship</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Public demo at austintransformer-spec-to-sim.hf.space (free ZeroGPU Space running on CPU). Staff-engineer judges found a grasp exploit, an 'inside' false positive and a 3D-view crash: all fixed with tests. Final judges: Tavily evidence votes now checked in code, the README leads with the verifier finding (3 Super repairs checked by MuJoCo matched Ultra at lower cost), a claims audit corrected ~20 statements, and live-demo QA fixes (per-visitor test limits, friendly errors). Ghost overlay off by default. Video v9 with hard cuts between screens.</dd>
+        <dt>Why</dt><dd>Ship-readiness and honesty: judges check numbers, and the demo must survive many visitors until Dec 15.</dd>
       </dl></div>
     </details>
 
