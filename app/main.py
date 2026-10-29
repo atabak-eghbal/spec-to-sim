@@ -274,9 +274,17 @@ def export(run_id: str, attempt: int | None = None) -> Response:
                     headers={"Content-Disposition": f'attachment; filename="spec2sim-{run_id}-attempt{attempt}.zip"'})
 
 
+class ObjectEdit(BaseModel):
+    """A user's correction of one object's real-world facts (the 'edit the grounding' feature)."""
+    size_cm: tuple[float, float, float] | None = None
+    mass_g: float | None = Field(None, ge=1, le=3000)
+    friction: float | None = Field(None, ge=0.05, le=2.0)
+
+
 class TryRequest(BaseModel):
     attempt: int
     moves: dict[str, tuple[float, float]] = Field(default_factory=dict, max_length=8)
+    edits: dict[str, ObjectEdit] = Field(default_factory=dict, max_length=8)
 
 
 _try_lock = threading.Lock()
@@ -284,8 +292,9 @@ _try_lock = threading.Lock()
 
 @app.post("/api/runs/{run_id}/try")
 def try_it(run_id: str, req: TryRequest) -> dict:
-    """'Try to break it': re-run a saved plan with objects moved to new (x, y) spots.
-    Physics only, no model calls; the plan's steps are relative to objects, so it adapts."""
+    """'Try to break it': re-run a saved plan with objects moved to new (x, y) spots, or with their
+    real-world facts corrected (size, mass, friction). Physics only, no model calls; the plan's steps
+    are relative to objects (skills even recompute heights from sizes), so it adapts."""
     events = _live[run_id].events if run_id in _live else _saved(run_id)
     if not events:
         raise HTTPException(404, "run not found")
@@ -295,18 +304,36 @@ def try_it(run_id: str, req: TryRequest) -> dict:
     if not task or req.attempt not in builds:
         raise HTTPException(404, "attempt not found")
     b = Build(**builds[req.attempt])
+    physics = _facts(events).physics()
     objs = []
     for o in b.objects:
         if o.name in req.moves:
             x, y = req.moves[o.name]
             o = o.model_copy(update={"pos": (round(x, 4), round(y, 4), o.pos[2])})
+        e = req.edits.get(o.name)
+        if e and o.shape not in ("bin", "drawer"):
+            upd = {}
+            if e.size_cm:
+                if not all(1 <= v <= 25 for v in e.size_cm):
+                    raise HTTPException(422, f"{o.name}: each size must be 1-25 cm")
+                size = tuple(round(v / 100, 4) for v in e.size_cm)
+                if o.shape in ("sphere", "cylinder"):  # round objects: one diameter
+                    d = max(size[0], size[1])
+                    size = (d, d, d if o.shape == "sphere" else size[2])
+                upd["size"] = size
+                upd["pos"] = (o.pos[0], o.pos[1], round(o.pos[2] - o.size[2] / 2 + size[2] / 2, 4))  # same bottom
+            if e.mass_g:
+                upd["mass"] = e.mass_g / 1000
+            o = o.model_copy(update=upd)
+            if e.friction:
+                physics[o.name] = (e.friction, (physics.get(o.name) or (1.0, 0.3))[1])
         objs.append(o)
     b = b.model_copy(update={"objects": objs})
     goals = [Goal(**g) for g in task["goals"]]
     with _try_lock:  # one at a time: it's CPU work on the web server
         n = len(list((RUNS / run_id).glob("try*"))) + 1
-        r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects}, _facts(events).physics())
-    return {"try": n, "attempt": req.attempt, "result": _public(r, run_id)}
+        r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects}, physics)
+    return {"try": n, "attempt": req.attempt, "result": _public(r, run_id), "edits": req.model_dump()["edits"]}
 
 
 class DatasetRequest(BaseModel):

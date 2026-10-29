@@ -156,7 +156,7 @@ ul.ev { margin: 0; padding-left: 1.1rem; font: 400 0.78rem/1.5 var(--mono); colo
 .v-goal { position: absolute; left: 0; top: 0; font: 500 0.74rem/1 var(--mono); padding: 0.3rem 0.5rem; border-radius: 99px; white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
 .v-goal.ok { background: #e1f1e6; color: #1f5c39; } .v-goal.bad { background: #f7e4df; color: #8f3420; }
-.cascade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; position: relative; }
+.cascade { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0; position: relative; }
 .node { position: relative; padding: 0.4rem 0.55rem 0.45rem; border: 1px solid var(--rule); background: var(--sheet); margin-right: 14px;
   border-radius: 6px; display: grid; gap: 0.25rem; min-width: 0; transition: border-color .3s, box-shadow .3s; }
 .node:not(:last-child)::after { content: ""; position: absolute; right: -15px; top: 50%; width: 14px; height: 2px; background: var(--rule); }
@@ -226,13 +226,43 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 .step-body table { display: block; max-width: 100%; overflow-x: auto; }
 @media (max-width: 520px) {
   #prompt { min-height: 3.4rem; }
-  .cascade { grid-template-columns: repeat(7, 8.2rem); overflow-x: auto; padding-bottom: 0.3rem; }
+  .cascade { grid-template-columns: repeat(8, 8.2rem); overflow-x: auto; padding-bottom: 0.3rem; }
   .prompt-row { grid-template-columns: 1fr; }
   button.run { padding: 0.75rem 1.4rem; }
   .brand h1 { font-size: 1.45rem; }
 }
 .pitch { margin: 0; font-size: 1.02rem; color: var(--ink); max-width: 62rem; }
 .pitch b { font-weight: 600; }
+.ex summary { cursor: pointer; font: 500 0.8rem/1 var(--mono); color: var(--muted); padding: 0.2rem 0; }
+.ex[open] summary { margin-bottom: 0.5rem; }
+.ex { display: grid; gap: 0.5rem; }
+.banner { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px; padding: 0.55rem 0.85rem; font-size: 0.9rem; }
+.outcome { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem 1rem; display: grid; gap: 0.55rem; }
+.o-prompt { margin: 0; font: 700 1.35rem/1.25 var(--display); font-stretch: 88%; }
+.o-verdict { margin: 0; font: 500 1rem/1.4 var(--body); }
+.o-verdict .ok { color: var(--ok); font-weight: 700; } .o-verdict .bad { color: var(--bad); font-weight: 700; }
+.o-verdict .meta { color: var(--muted); font: 400 0.85rem/1 var(--mono); }
+.o-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.o-sub { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.export-btn.primary { background: var(--ink); color: var(--paper); }
+.headline { margin: 0; font: 600 1.02rem/1.35 var(--body); }
+.headline.ok { color: var(--ok); } .headline.bad { color: var(--bad); }
+details.step > summary { list-style: none; cursor: pointer; }
+details.step > summary::-webkit-details-marker { display: none; }
+details.step:not([open]) { opacity: 0.85; }
+.cands { display: grid; gap: 0.25rem; font: 400 0.8rem/1.35 var(--mono); }
+.cands .chosen { font-weight: 600; }
+.tiles { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; margin: 0.3rem 0; }
+.tile { height: 0.9rem; border-radius: 3px; background: var(--ok); }
+.tile.bad { background: var(--bad); }
+.feas { width: 100%; height: 100%; display: grid; place-content: center; gap: 0.9rem; padding: 1.5rem; color: #e6edf2; font-size: 0.95rem; }
+.feas .bar { height: 1.4rem; border-radius: 4px; }
+.feas .row { display: grid; grid-template-columns: 9rem 1fr; gap: 0.8rem; align-items: center; }
+@media (max-width: 900px) { .stage { order: -1; } }
+.policy { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 0.7rem 0.85rem; font-size: 0.86rem; }
+.prow { display: grid; grid-template-columns: 8.5rem 1fr 3rem; gap: 0.6rem; align-items: center; margin: 0.25rem 0; }
+.prow b { font: 500 0.85rem/1 var(--mono); text-align: right; }
+input.ed { width: 3.3rem; font: 400 0.78rem/1 var(--mono); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; padding: 0.15rem 0.2rem; }
 .crit-sheet { margin: 0 0 10px; }
 .crit-sheet img { width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
 .crit-sheet figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -243,17 +273,13 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
   <header>
     <div class="brand">
       <h1>Spec-to-Sim</h1>
-      <p>Describe a robot task. Watch it become a simulation, and watch the AI fix its own mistakes.</p>
+      <p>Type a robot task. Get a checked MuJoCo simulation that repairs itself, a stress test, and training data.</p>
     </div>
-    <div class="cascade-key" aria-label="Models in the cascade">
-      <span class="badge b-Super">Nemotron 3 Super</span><span class="badge b-Nano">Nano</span>
-      <span class="badge b-SuperVL">3.5 Super VL</span><span class="badge b-Ultra">Ultra</span>
-      <span class="label">on Nebius Token Factory</span>
+    <div class="cascade-key">
+      <span class="label">NVIDIA Nemotron on Nebius Token Factory · Tavily</span>
       <button type="button" class="theme" id="theme" title="Switch light / dark">◐</button>
     </div>
   </header>
-
-  <p class="pitch"><b>For robotics teams:</b> type one sentence, get a checked MuJoCo test scene (real object sizes from the web), a motion plan and training data in about a minute, instead of building the scene by hand.</p>
 
   <section class="composer" aria-label="New task">
     <form class="prompt-row" id="form">
@@ -261,10 +287,13 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
       <textarea id="prompt" rows="1" placeholder="e.g. Put the Rubik's cube on top of the soda can" maxlength="300"></textarea>
       <button class="run" id="runbtn" type="submit">Simulate</button>
     </form>
-    <div class="gtabs" id="gtabs" role="tablist" aria-label="Example categories"></div>
-    <div class="chips" id="examples"><span class="label">Try</span></div>
-    <div class="chips" id="featured" hidden><span class="label">Recorded runs</span></div>
+    <details class="ex" id="ex"><summary>Examples and recorded runs</summary>
+      <div class="gtabs" id="gtabs" role="tablist" aria-label="Example categories"></div>
+      <div class="chips" id="examples"><span class="label">Try</span></div>
+      <div class="chips" id="featured" hidden><span class="label">Recorded runs</span></div>
+    </details>
   </section>
+  <div class="banner" id="banner" hidden></div>
 
   <div class="cascade" id="cascade" aria-label="Model cascade"></div>
 
@@ -273,31 +302,31 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
       <div class="timeline" id="timeline">
         <div class="empty">
           <b>Each step of the cascade appears here as it runs.</b>
-          <span>Planner (Super) writes the task spec. Grounder looks up real sizes on the web with Tavily and Nano. Builder (Super) places objects and plans the motion. The simulator runs it and checks the goals in code. If it fails, Super VL watches the video and explains why, and the plan is repaired, escalating to Ultra if needed.</span>
+          <span>Planner (Super) writes the task spec. Grounder looks up real sizes on the web with Tavily and Nano. Builder (Super) places objects and plans the motion. The simulator runs it and checks the goals in code. Super VL checks the scene before the robot moves; if a goal fails it watches the run and explains why, and three repair candidates are tested in the simulator.</span>
         </div>
       </div>
     </section>
 
     <aside class="stage" aria-label="Simulation">
+      <div class="outcome" id="outcome" hidden>
+        <p class="o-prompt" id="o-prompt"></p>
+        <p class="o-verdict" id="o-verdict"></p>
+        <div class="o-actions">
+          <div class="export" id="export" hidden>
+            <a id="export-link" class="export-btn primary" href="#" download>Export scene + policy test harness</a>
+          </div>
+          <div class="export" id="dataset" hidden>
+            <button type="button" id="dataset-btn" class="export-btn">Generate training data</button>
+          </div>
+        </div>
+        <p class="o-sub" id="dataset-msg">Export: MuJoCo scene, goal checks, and <span class="mono">evaluate.py</span> to score your own policy on randomized versions of it. Training data: 20 scripted demos with varied starts, LeRobot format (GR00T can read it). Both physics only, no model cost.</p>
+      </div>
       <div class="tabs-row"><div class="tabs" id="tabs" role="tablist"></div>
-        <div class="modes" id="modes" hidden><button type="button" id="ghost-btn" class="ghost-btn" hidden title="Show the first failed attempt's objects as red ghosts">Ghost of failure</button><button type="button" data-mode="3d">3D</button><button type="button" data-mode="compare">Before / after</button><button type="button" data-mode="video">Video</button></div></div>
+        <div class="modes" id="modes" hidden><button type="button" id="ghost-btn" class="ghost-btn" hidden title="Show the first failed attempt's objects as red ghosts">Ghost of failure</button><button type="button" data-mode="3d">3D</button><button type="button" data-mode="compare">Before / after</button><button type="button" data-mode="video" title="The plain MuJoCo render: what the Critic watches">Raw render</button></div></div>
       <div class="screen" id="screen"><div class="idle">Each attempt replays here in 3D. Drag to look around.</div></div>
       <div class="goals" id="goals"></div>
       <div class="robust-line" id="robust" hidden></div>
-      <div class="export" id="export" hidden>
-        <a id="export-link" class="export-btn" href="#" download>Export scene</a>
-        <span>MuJoCo scene, success checks and motion plan as a zip, ready to test your own robot policy.</span>
-      </div>
-      <div class="export" id="dataset" hidden>
-        <button type="button" id="dataset-btn" class="export-btn">Generate training data</button>
-        <span id="dataset-msg">20 successful demonstrations with varied starts, in LeRobot format (a format NVIDIA GR00T can read). Scripted demos with the grasp assist. Physics only, no model cost.</span>
-      </div>
-      <div class="totals">
-        <div class="tot"><span class="label">Result</span><b id="t-result">—</b></div>
-        <div class="tot"><span class="label">Attempts</span><b id="t-att">—</b></div>
-        <div class="tot"><span class="label">Model cost</span><b id="t-cost">—</b></div>
-        <div class="tot"><span class="label">Elapsed</span><b id="t-time">—</b></div>
-      </div>
+      <div class="policy" id="policy" hidden></div>
       <div class="mix" id="mix" hidden>
         <span class="label">Model time by stage</span>
         <div class="mixbar" id="mixbar"></div>
@@ -322,8 +351,9 @@ const $ = (id) => document.getElementById(id);
 })();
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const badgeClass = (label) => "b-" + String(label || "code").replace(/\s+/g, "");
-const STEP_NAMES = { planner: "Planner", grounder: "Grounder", builder: "Builder", runner: "Simulator", critic: "Critic", repair: "Repair", stress: "Stress test" };
-const STEP_MODEL = { planner: "Super", grounder: "Nano", builder: "Super", runner: null, critic: "Super VL" };
+const STEP_NAMES = { planner: "Planner", grounder: "Real-world facts", builder: "Builder", scenecheck: "Scene check", runner: "Simulator", critic: "Critic", repair: "Repair", stress: "Stress test" };
+const STEP_MODEL = { planner: "Super", grounder: "Nano", builder: "Super", scenecheck: "Super VL", runner: null, critic: "Super VL", repair: "Super" };
+const SETUP = new Set(["planner", "builder", "scenecheck"]);  // folded away once a run is done
 
 let state, source, ticker;
 
@@ -335,14 +365,14 @@ reset();
 /* ---------- event intake ---------- */
 function onEvent(ev) {
   state.events.push(ev);
-  if (ev.type === "start") { state.start = ev.ts; state.trace = ev.trace_url; state.runId = ev.run_id; }
+  if (ev.type === "start") { state.start = ev.ts; state.trace = ev.trace_url; state.runId = ev.run_id; state.prompt = ev.prompt; }
   if (ev.type === "queued") state.queued = ev.message;
   if (ev.type === "step") {
     const key = ev.step + "#" + (ev.attempt || 0);
     let s = state.steps.find((x) => x.key === key);
     if (!s) { s = { key, step: ev.step, attempt: ev.attempt, startTs: ev.ts, model: ev.model, escalated: ev.escalated }; state.steps.push(s); }
     if (ev.status === "done") {
-      Object.assign(s, { doneTs: ev.ts, stats: ev.stats, data: ev.data, sources: ev.sources, tavily: ev.tavily, skipped: ev.skipped });
+      Object.assign(s, { doneTs: ev.ts, stats: ev.stats, data: ev.data, sources: ev.sources, tavily: ev.tavily, skipped: ev.skipped, candidates: ev.candidates });
       if (ev.stats) state.cost += ev.stats.cost_usd;
       if (ev.step === "runner") { state.attempts[ev.attempt] = ev.data; state.selected = ev.attempt; }
     }
@@ -354,9 +384,30 @@ function onEvent(ev) {
 }
 
 /* ---------- rendering ---------- */
+let editFacts = false;  // the Real-world facts card is in edit mode
+document.addEventListener("click", async (e) => {
+  const id = e.target && e.target.id;
+  if (id === "facts-edit" || id === "facts-cancel") { editFacts = id === "facts-edit"; renderTimeline(); return; }
+  if (id !== "facts-run") return;
+  const edits = {};
+  for (const tr of document.querySelectorAll("tr[data-obj]")) {
+    const v = (k) => parseFloat(tr.querySelector(`[data-k="${k}"]`).value);
+    edits[tr.dataset.obj] = { size_cm: [v("s0"), v("s1"), v("s2")], mass_g: v("m"), friction: Number.isFinite(v("f")) ? v("f") : null };
+  }
+  e.target.disabled = true; $("facts-msg").textContent = "Re-running in the simulator…";
+  try { await tryIt({}, edits); editFacts = false; renderTimeline(); }
+  catch (err) { $("facts-msg").textContent = "Could not re-run: " + err.message; e.target.disabled = false; }
+});
 const fmtS = (s) => (s < 10 ? s.toFixed(1) : Math.round(s)) + " s";
 const fmt$ = (c) => "$" + (c < 0.01 ? c.toFixed(4) : c.toFixed(3));
 const cm = (m) => (m * 100).toFixed(1);
+
+// One tile per stress-test variant: green = every goal still passes, red = not (hover for why).
+function tiles(d) {
+  const tip = (r, i) => `variant ${i + 1}: ` + (r.ok ? "pass" : (r.error || (r.failed || []).join("; ") || "fail"));
+  return `<div class="tiles">${(d.rows || []).map((r, i) => `<span class="tile ${r.ok ? "ok" : "bad"}" title="${esc(tip(r, i))}"></span>`).join("")}</div>`;
+}
+const firstSentence = (t) => { const m = String(t || "").match(/^.{20,240}?\.(\s|$)/); return (m ? m[0] : String(t || "").slice(0, 240)).trim(); };
 
 function stepBody(s) {
   const d = s.data;
@@ -368,7 +419,7 @@ function stepBody(s) {
       const pv = d.perturbation;
       const seen = pv.sensing_cm ? ` The robot sees each object up to ${pv.sensing_cm} cm from where it really is, like a camera's error.` : "";
       const fp = d.first_plan ? ` The first plan (attempt ${d.first_plan.attempt}) passed ${d.first_plan.passed}/${d.first_plan.trials} of the same test.` : "";
-      return `<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction.${seen}${fp} Physics only, no model calls (${d.seconds} s).</p>
+      return `${tiles(d)}<p><b>${d.passed}/${d.trials}</b> perturbed re-runs still pass. Each object starts up to ${pv.position_cm} cm away and ${pv.yaw_deg}° turned, weighs ±${pv.mass_pct}%, with ±${pv.friction_pct}% friction.${seen}${fp} Physics only, no model calls (${d.seconds} s).</p>
         <div class="robust"><span style="width:${(100 * pct).toFixed(0)}%"></span></div>
         ${d.per_goal.length > 1 ? `<p class="mono" style="font-size:.78rem">${d.per_goal.map((p) => esc(`${p.goal.obj} ${p.goal.type} ${p.goal.target || ""}`.trim()) + `: ${p.passed}/${d.trials}`).join("<br>")}</p>` : ""}`;
     }
@@ -381,8 +432,13 @@ function stepBody(s) {
         : !f.source_url ? `<span class="pill p-warn">estimate</span>`
         : f.sources_checked > 1 ? `<span class="pill ${f.sources_agree >= 2 ? "p-ok" : "p-warn"}" title="independent sources that gave a size / that agree within 20%">${f.sources_agree}/${f.sources_checked} agree</span>`
         : `<span class="pill p-ok">1 source</span>`;
+      const editable = editFacts && state.done && attemptNums().length;
       const rows = d.facts.map((f) => {
         const m = f.material && mats[f.material];
+        if (editable && !/bin|drawer/.test(f.note || "") && !/basket|bin|tray|drawer|cabinet/.test(f.name)) return `<tr data-obj="${esc(f.name)}"><td></td><td>${esc(f.name)}</td>
+          <td class="n">${f.size.map((v, i) => `<input class="ed" data-k="s${i}" type="number" step="0.1" min="1" max="25" value="${cm(v)}">`).join("×")} cm</td>
+          <td class="n"><input class="ed" data-k="m" type="number" step="1" min="1" max="3000" value="${Math.round(f.mass * 1000)}"> g</td>
+          <td class="n">μ <input class="ed" data-k="f" type="number" step="0.05" min="0.05" max="2" value="${m ? m.friction : ""}"></td></tr>`;
         return `<tr><td class="thumb">${f.image_url ? `<img src="${esc(f.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</td>
         <td>${esc(f.name)}${m ? `<div class="sub">${esc(f.material)} · μ ${m.friction} · bounce ${m.restitution}</div>` : ""}</td>
         <td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
@@ -403,25 +459,44 @@ function stepBody(s) {
         ${checks ? `<ul class="checks">${checks}</ul>` : ""}
         ${phys ? `<details class="more" open><summary>Physics from the web (friction, bounciness)</summary><table class="facts phys"><tbody>${phys}</tbody></table></details>` : ""}
         ${robot}
+        ${state.done && attemptNums().length ? (editable
+          ? `<div class="o-actions"><button type="button" class="export-btn primary" id="facts-run">Re-run with these facts</button><button type="button" class="export-btn" id="facts-cancel">Cancel</button><span class="muted" id="facts-msg" style="font-size:.78rem">Physics only, no model call. The plan's skills adapt to the new sizes.</span></div>`
+          : `<button type="button" class="export-btn" id="facts-edit">Edit sizes, masses, friction and re-run</button>`) : ""}
         ${srcs ? `<details class="more"><summary>${(s.sources || []).length} web sources</summary><div class="src" style="margin-top:.4rem">${srcs}</div></details>` : ""}`;
+    }
+    case "scenecheck": {
+      if (d.error) return `<p class="muted">Scene check unavailable: ${esc(d.error)}</p>`;
+      const probs = (d.problems || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      return `<p class="headline ${d.ok ? "ok" : ""}">${d.ok ? "✓ The scene matches the task" : "⚠ Possible problems spotted"}</p>
+        ${d.image ? `<figure class="crit-sheet"><img src="/media/${esc(d.image)}" alt="The scene before the robot moves, from the side and from above" loading="lazy"><figcaption>What the vision model saw before the run (advisory: it never blocks a run)</figcaption></figure>` : ""}
+        <p>${esc(d.what_i_see)}</p>${probs ? `<ul class="checks">${probs}</ul>` : ""}`;
     }
     case "builder":
     case "repair": {
       const acts = d.plan.actions.map((a) => {
+        if (["pick", "place_on", "drop_into", "push"].includes(a.op)) return `<li><b>${esc(a.op)}</b> ${esc([a.object, a.target, a.direction].filter(Boolean).join(" → "))}${a.offset && a.offset.some((v) => v) ? " [" + a.offset.map((v) => v.toFixed(2)).join(", ") + "]" : ""}</li>`;
         if (a.op === "move_to") return `<li>move_to ${a.object ? esc(a.object) + " + [" + a.offset.map((v) => v.toFixed(3)).join(", ") + "]" : "[" + (a.xyz || []).join(", ") + "]"}${a.yaw ? " yaw " + a.yaw.toFixed(2) : ""}</li>`;
         return `<li>${esc(a.op)}</li>`;
       }).join("");
-      return `<p>${esc(d.rationale)}</p>
+      const c = s.candidates || [];
+      const cands = c.length ? `<p class="headline">Tested ${c.length} repair candidates in the simulator; ran the best</p><div class="cands">${c.map((x, i) =>
+        `<div class="${x.chosen ? "chosen" : ""}">${x.chosen ? "▶" : "·"} candidate ${i + 1}: ${x.ok ? "✓ all goals" : x.passed < 0 ? "✗ invalid scene" : `${x.passed} goal${x.passed === 1 ? "" : "s"} pass`}${x.chosen ? " (chosen)" : ""}</div>`).join("")}</div>` : "";
+      return `${cands}<p>${esc(d.rationale)}</p>
         <details class="more"><summary>${d.objects.length} objects · ${d.plan.actions.length} actions</summary><ol class="actions">${acts}</ol></details>`;
     }
     case "runner": {
       const goals = d.goals.map((g) => `<div class="goal"><span class="pill ${g.ok ? "p-ok" : "p-bad"}">${g.ok ? "pass" : "fail"}</span><span>${esc(g.detail)}</span></div>`).join("");
-      return `${d.error ? `<p class="errbox">${esc(d.error)}</p>` : ""}${goals}
-        ${d.events.length ? `<ul class="ev">${d.events.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}`;
+      const miss = d.goals.find((g) => !g.ok);
+      const head = d.success ? `<p class="headline ok">✓ All ${d.goals.length} goals pass, checked in code</p>`
+        : `<p class="headline bad">✗ ${esc(d.error && !d.goals.length ? "The scene was invalid: " + firstSentence(d.error) : miss ? miss.detail : firstSentence(d.error))}</p>`;
+      return `${head}<details class="more"${d.success ? "" : " open"}><summary>${d.goals.length} goals · ${d.events.length} sim events</summary>
+        ${d.error ? `<p class="errbox">${esc(d.error)}</p>` : ""}${goals}
+        ${d.events.length ? `<ul class="ev">${d.events.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}</details>`;
     }
     case "critic": {
       const sheet = !s.skipped && state.attempts[s.attempt] && state.attempts[s.attempt].contact_sheet_path;
-      return `${sheet ? `<figure class="crit-sheet"><img src="/media/${esc(sheet)}" alt="The 8 frames the Critic watched, in order" loading="lazy"><figcaption>The 8 frames it watched</figcaption></figure>` : ""}<dl class="crit">
+      const lead = `<p class="headline">${esc(firstSentence(d.root_cause))}</p>`;
+      return `${lead}${sheet ? `<figure class="crit-sheet"><img src="/media/${esc(sheet)}" alt="The 8 frames the Critic watched, in order" loading="lazy"><figcaption>The 8 frames it watched</figcaption></figure>` : ""}<dl class="crit">
         <dt>Category</dt><dd><span class="pill p-bad">${esc(d.category.replace(/_/g, " "))}</span></dd>
         <dt>${s.skipped ? "Skipped" : "What the video shows"}</dt><dd>${esc(d.what_happened)}</dd>
         <dt>Root cause</dt><dd>${esc(d.root_cause)}</dd>
@@ -434,7 +509,7 @@ function stepBody(s) {
 // Stage views: "3d" (one attempt), "compare" (first failed attempt beside the final one, same clock
 // and camera), "video" (server MP4). ?view=compare and ?ghost=1 preselect for links and video capture.
 const qs0 = new URL(location).searchParams;
-let viewer = null, cmp = null, viewMode = qs0.get("view") === "compare" ? "compare" : "3d", ghostOn = qs0.get("ghost") === "1";
+let viewer = null, cmp = null, viewMode = qs0.get("view") === "compare" ? "compare" : "3d", ghostOn = qs0.get("ghost") !== "0";
 const attemptNums = () => Object.keys(state.attempts).map(Number).filter((n) => n < 1000).sort((a, b) => a - b);
 function compareSet() {
   const nums = attemptNums().filter((n) => state.attempts[n].viz_path);
@@ -517,11 +592,12 @@ function renderScreen(r) {
 
 // Training data: N successful perturbed demonstrations in LeRobot format, generated on the server.
 let dsRun = null, dsTimer = null;
+const DS_MSG = `Export: MuJoCo scene, goal checks, and <span class="mono">evaluate.py</span> to score your own policy on randomized versions of it. Training data: 20 scripted demos with varied starts, LeRobot format (GR00T can read it). Both physics only, no model cost.`;
 function dsReset() {
   clearInterval(dsTimer);
   $("dataset-btn").disabled = false;
   $("dataset-btn").textContent = "Generate training data";
-  $("dataset-msg").textContent = "20 successful demonstrations with varied starts, in LeRobot format (a format NVIDIA GR00T can read). Scripted demos with the grasp assist. Physics only, no model cost.";
+  $("dataset-msg").innerHTML = DS_MSG;
 }
 function dsShow(j) {
   if (j.state === "running") {
@@ -554,10 +630,11 @@ $("dataset-btn").addEventListener("click", async () => {
 });
 
 // "Try to break it": re-run the selected attempt's plan with dragged objects (no model calls).
-async function tryIt(moves) {
-  const base = state.selected;
+async function tryIt(moves, edits = {}) {
+  const nums = attemptNums();
+  const base = state.selected < TRY ? state.selected : nums[nums.length - 1];
   const r = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/try`, { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attempt: base, moves }) });
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attempt: base, moves, edits }) });
   const d = await r.json();
   if (!r.ok) throw new Error(d.detail || r.statusText);
   if (d.result.error && !d.result.viz_path) throw new Error(d.result.error);
@@ -587,8 +664,11 @@ function renderTimeline() {
     const att = s.attempt ? `<span class="step-attempt">attempt ${s.attempt}</span>` : "";
     const esc8 = s.escalated ? `<span class="pill p-bad">escalated</span>` : "";
     const status = running ? `<div class="spin" aria-label="running"></div>` : failed ? `<span class="pill p-bad">fail</span>` : s.step === "runner" ? `<span class="pill p-ok">pass</span>` : "";
-    html += `<div class="step ${cls}"><div class="step-head">${status}<span class="step-name">${esc(name)}</span>${att}${badges}${esc8}<span class="step-meta">${meta}</span></div>
-      <div class="step-body">${running ? `<p style="color:var(--muted)">${runningText(s)}</p>` : stepBody(s)}</div></div>`;
+    const head = `${status}<span class="step-name">${esc(name)}</span>${att}${badges}${esc8}<span class="step-meta">${meta}</span>`;
+    const body = running ? `<p style="color:var(--muted)">${runningText(s)}</p>` : stepBody(s);
+    html += state.done && SETUP.has(s.step)
+      ? `<details class="step ${cls}"><summary class="step-head">${head}<span class="step-meta">▸</span></summary><div class="step-body">${body}</div></details>`
+      : `<div class="step ${cls}"><div class="step-head">${head}</div><div class="step-body">${body}</div></div>`;
   }
   for (const n of state.notes || []) html += `<div class="note">${esc(n)}</div>`;
   if (state.done && state.done.infeasible) {
@@ -606,8 +686,9 @@ function runningText(s) {
     builder: "Placing objects and planning the motion…",
     runner: "Simulating in MuJoCo and checking the goals…",
     critic: "Watching the video to work out what went wrong…",
+    scenecheck: "Looking at the scene before the robot moves…",
     stress: "Re-running the plan under random perturbations…",
-    repair: s.escalated ? "Escalated to Nemotron Ultra for a deeper repair…" : "Rewriting the plan using the critique…",
+    repair: "Writing 3 repair candidates and testing each in the simulator…",
   }[s.step] || "Working…";
 }
 
@@ -616,8 +697,7 @@ function renderStage() {
   const all = Object.keys(state.attempts).map(Number).sort((a, b) => a - b);
   const nums = all.filter((n) => n < TRY);
   if (!all.length && (state.done || state.error)) {
-    const why = state.done && state.done.infeasible ? "The task was refused before any scene was built: the steps explain why." : "Nothing was simulated in this run.";
-    $("screen").innerHTML = `<div class="idle">${why}</div>`;
+    $("screen").innerHTML = state.done && state.done.infeasible ? feasCard(state.done.infeasible) : `<div class="idle">Nothing was simulated in this run.</div>`;
   }
   $("tabs").innerHTML = all.map((n) => {
     const ok = state.attempts[n].success;
@@ -629,20 +709,17 @@ function renderStage() {
   const st = state.steps.find((x) => x.step === "stress" && x.data);
   const lastOk = Math.max(...nums.filter((n) => state.attempts[n].success), -1);
   $("robust").hidden = !(st && state.selected === lastOk);
-  if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass, friction and what the robot sees`;
+  if (st) $("robust").innerHTML = `<span class="pill ${st.data.passed === st.data.trials ? "p-ok" : "p-warn"}">robust ${st.data.passed}/${st.data.trials}</span> under random changes to start pose, mass, friction and what the robot sees${tiles(st.data)}`;
   $("export").hidden = !(r && state.runId && !r.error && state.selected < TRY);
   const solved = nums.some((n) => state.attempts[n].success);
   $("dataset").hidden = !(state.done && solved && state.runId);
+  $("dataset-msg").hidden = $("dataset").hidden && $("export").hidden;
   if (dsRun !== state.runId) { dsRun = state.runId; dsReset(); }
   if (r && state.runId) $("export-link").href = `/api/runs/${encodeURIComponent(state.runId)}/export?attempt=${state.selected}`;
   $("goals").innerHTML = r ? r.goals.map((g) => `<div class="goal"><span class="pill ${g.ok ? "p-ok" : "p-bad"}">${g.ok ? "pass" : "fail"}</span><span>${esc(g.detail)}</span></div>`).join("") : "";
 
-  const d = state.done;
-  $("t-result").textContent = d ? (d.success ? "Success" : d.infeasible ? "Infeasible" : "Failed") : state.error ? "Error" : state.start ? "Running" : "—";
-  $("t-result").style.color = d ? (d.success ? "var(--ok)" : "var(--bad)") : "";
-  $("t-att").textContent = nums.length ? String(nums.length) : "—";
-  $("t-cost").textContent = state.start ? fmt$(state.cost) : "—";
-  $("t-time").textContent = state.start ? fmtS(((state.end || Date.now() / 1000) - state.start)) : "—";
+  renderOutcome(nums, st);
+  renderPolicy();
 
   // model time split by stage (latency is what the user waits for)
   const per = {};
@@ -659,14 +736,66 @@ function renderStage() {
   $("trace").innerHTML = state.trace ? `<a href="${esc(state.trace)}" target="_blank" rel="noopener">Open the full LangSmith trace →</a>` : "";
 }
 
+// Policy report card (scripts/train_policy.py): a small policy trained on this task's generated
+// demos, tested on the same perturbed variants as the scripted plan. Shown when the run has one.
+let policyRun = null, policyData = null;
+function renderPolicy() {
+  if (policyRun !== state.runId) {
+    policyRun = state.runId; policyData = null; $("policy").hidden = true;
+    if (state.runId) fetch(`/media/${encodeURIComponent(state.runId)}/policy_report.json`).then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d && policyRun === state.runId) { policyData = d; renderPolicy(); } }).catch(() => {});
+    return;
+  }
+  const d = policyData;
+  if (!d) return;
+  const bar = (x, color) => `<div class="robust"><span style="width:${(100 * x.passed / x.trials).toFixed(0)}%;background:${color}"></span></div>`;
+  $("policy").hidden = false;
+  $("policy").innerHTML = `<span class="label">Policy report card</span>
+    <p style="margin:.3rem 0">A small neural policy (${esc(d.policy_kind)}) trained on ${d.episodes_trained} generated demos of this task, tested on the same ${d.learned.trials} perturbed variants as the scripted plan.</p>
+    <div class="prow"><span>Scripted plan</span>${bar(d.scripted, "var(--ok)")}<b>${d.scripted.passed}/${d.scripted.trials}</b></div>
+    <div class="prow"><span>Learned policy</span>${bar(d.learned, d.learned.passed === d.learned.trials ? "var(--ok)" : "var(--warn)")}<b>${d.learned.passed}/${d.learned.trials}</b></div>
+    ${(d.learned.failures || []).length ? `<details class="more"><summary>Where the learned policy fails</summary><ul class="checks">${d.learned.failures.slice(0, 5).map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>` : ""}`;
+}
+
+// Outcome bar: the task in big type, and the story of the run in one line.
+function renderOutcome(nums, st) {
+  const d = state.done;
+  $("outcome").hidden = !state.start;
+  $("o-prompt").textContent = state.prompt ? `“${state.prompt}”` : "";
+  const secs = state.start ? fmtS((state.end || Date.now() / 1000) - state.start) : "";
+  const meta = `<span class="meta"> · ${secs} · ${fmt$(state.cost)}${st ? ` · robust ${st.data.passed}/${st.data.trials}` : ""}</span>`;
+  let v;
+  if (state.error) v = `<span class="bad">Stopped:</span> ${esc(firstSentence(state.error))}`;
+  else if (!d) v = `Running${nums.length ? `: attempt ${nums.length}` : "…"}`;
+  else if (d.infeasible) v = `<span class="bad">Refused before building</span>: ${esc(firstSentence(d.infeasible))}`;
+  else if (d.success && nums.length === 1) v = `<span class="ok">✓ Passed on the first try</span>`;
+  else if (d.success) v = `<span class="bad">✗ Attempt 1 failed</span> → diagnosed → repaired → <span class="ok">✓ passed on attempt ${nums.length}</span>`;
+  else v = `<span class="bad">✗ Still failing after ${nums.length} attempts</span>`;
+  $("o-verdict").innerHTML = v + (d || state.error ? meta : "");
+}
+
+// A refused task: the object's width (from the web) against the gripper's opening (datasheet).
+function feasCard(msg) {
+  const w = parseFloat((msg.match(/is ([\d.]+) cm wide/) || [])[1]);
+  const g = parseFloat((msg.match(/opens ([\d.]+) cm/) || [])[1]);
+  const name = (msg.match(/^(\w+)/) || [])[1] || "object";
+  if (!w || !g) return `<div class="idle">${esc(msg)}</div>`;
+  const top = Math.max(w, g) * 1.15, pct = (x) => (100 * x / top).toFixed(1);
+  return `<div class="feas"><b style="font-size:1.15rem">Physically infeasible: refused before spending on a build</b>
+    <div class="row"><span>${esc(name)} (web)</span><div class="bar" style="width:${pct(w)}%;background:#ec8a72"></div></div>
+    <div class="row"><span>Franka gripper</span><div class="bar" style="width:${pct(g)}%;background:#6fc38f"></div></div>
+    <span class="mono" style="font-size:.85rem">${w} cm wide vs ${g} cm opening. Sources in the steps.</span></div>`;
+}
+
 // The cascade strip: one node per pipeline stage, lit as the run moves through it.
 const CASCADE = [
   { step: "planner", name: "Planner", model: "Nemotron 3 Super" },
   { step: "grounder", name: "Grounder", model: "Tavily + Nemotron Nano" },
-  { step: "builder", name: "Builder", model: "Nemotron 3 Super" },
+  { step: "builder", name: "Builder", model: "Nemotron 3 Super · skills" },
+  { step: "scenecheck", name: "Scene check", model: "Nemotron 3.5 Super VL" },
   { step: "runner", name: "Simulator", model: "MuJoCo · checks in code" },
   { step: "critic", name: "Critic", model: "Nemotron 3.5 Super VL" },
-  { step: "repair", name: "Repair", model: "Super, Ultra if needed" },
+  { step: "repair", name: "Repair", model: "3 Super candidates, best by sim" },
   { step: "stress", name: "Stress test", model: "MuJoCo · 16 variations" },
 ];
 function renderCascade() {
@@ -681,7 +810,6 @@ function renderCascade() {
       const cost = runs.reduce((a, s) => a + (s.stats ? s.stats.cost_usd : 0), 0);
       meta = `${fmtS(secs)}${cost ? " · " + fmt$(cost) : ""}`;
       if (c.step === "repair" && runs.some((s) => s.escalated)) { model = "escalated to Ultra"; if (cls !== "active") cls = "esc"; }
-      else if (c.step === "repair") model = "Nemotron 3 Super";
       if (c.step === "critic" && runs.every((s) => s.skipped)) model = "skipped, no model call";
       if (c.step === "stress" && last.data) meta = `${last.data.passed}/${last.data.trials} robust`;
     }
@@ -708,7 +836,9 @@ $("tabs").addEventListener("click", (e) => {
 /* ---------- running & replay ---------- */
 function setBusy(b) { $("runbtn").disabled = b; $("runbtn").textContent = b ? "Running…" : "Simulate"; }
 
-function follow(runId) {
+function follow(runId, live = false) {
+  $("banner").hidden = live;
+  $("banner").innerHTML = `Replaying a recorded run (no model calls). Type your own task above and press Simulate to run it live: about a minute, under a cent.`;
   if (source) source.close();
   clearInterval(ticker);
   reset();
@@ -738,7 +868,7 @@ $("form").addEventListener("submit", async (e) => {
   try {
     const r = await fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    follow((await r.json()).run_id);
+    follow((await r.json()).run_id, true);
   } catch (err) {
     setBusy(false);
     $("timeline").innerHTML = `<div class="errbox">Could not start the run: ${esc(err.message)}</div>`;

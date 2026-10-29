@@ -1,0 +1,50 @@
+{
+  "episodes_trained": 100,
+  "train_seconds": 41.5,
+  "policy_kind": "mlp x5",
+  "scripted": {
+    "passed": 16,
+    "trials": 16,
+    "per_goal": [
+      {
+        "goal": {
+          "type": "on",
+          "obj": "tennis_ball",
+          "target": "rubiks_cube"
+        },
+        "passed": 16
+      }
+    ]
+  },
+  "learned": {
+    "passed": 4,
+    "trials": 16,
+    "per_goal": [
+      {
+        "goal": {
+          "type": "on",
+          "obj": "tennis_ball",
+          "target": "rubiks_cube"
+        },
+        "passed": 4
+      }
+    ],
+    "failures": [
+      "tennis_ball is 15.0 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 17.6 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 46.7 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 38.4 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 17.2 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 43.7 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 27.4 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)",
+      "tennis_ball is 16.9 cm off-center from rubiks_cube (tol 3.3), height error -5.6 cm (tol \u00b11.5)"
+    ]
+  },
+  "perturbation": {
+    "position_cm": 4.0,
+    "yaw_deg": 30,
+    "mass_pct": 20,
+    "friction_pct": 30,
+    "sensing_cm_scripted_only": 0.5
+  }
+}

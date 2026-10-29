@@ -1,0 +1,41 @@
+{
+  "episodes_trained": 100,
+  "train_seconds": 41.3,
+  "policy_kind": "mlp x5",
+  "scripted": {
+    "passed": 16,
+    "trials": 16,
+    "per_goal": [
+      {
+        "goal": {
+          "type": "on",
+          "obj": "red_cube",
+          "target": "blue_cube"
+        },
+        "passed": 16
+      }
+    ]
+  },
+  "learned": {
+    "passed": 16,
+    "trials": 16,
+    "per_goal": [
+      {
+        "goal": {
+          "type": "on",
+          "obj": "red_cube",
+          "target": "blue_cube"
+        },
+        "passed": 16
+      }
+    ],
+    "failures": []
+  },
+  "perturbation": {
+    "position_cm": 4.0,
+    "yaw_deg": 30,
+    "mass_pct": 20,
+    "friction_pct": 30,
+    "sensing_cm_scripted_only": 0.5
+  }
+}
