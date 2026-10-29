@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spec-to-Sim</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315212b'/%3E%3Cpath d='M9 24V14l7-6 7 6v10' stroke='%237fb0e0' stroke-width='3' fill='none'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -225,6 +226,12 @@ button.export-btn:disabled { opacity: 0.5; cursor: progress; }
 /* Phones: wide tables scroll inside their card; the cascade strip scrolls sideways. */
 .step-body table { display: block; max-width: 100%; overflow-x: auto; }
 @media (max-width: 520px) {
+  /* 3D toolbar on phones: the slider gets its own row, buttons wrap, no mouse hint, no caption over the scene */
+  .v-bar { flex-wrap: wrap; row-gap: 0.35rem; }
+  .v-track { flex: 1 1 100%; order: -1; }
+  .v-caption.v-hint { display: none; }
+  .v-caption:not(.v-hint) { display: none; }
+  .screen { aspect-ratio: 4 / 3; }
   #prompt { min-height: 3.4rem; }
   .cascade { grid-template-columns: repeat(8, 8.2rem); overflow-x: auto; padding-bottom: 0.3rem; }
   .prompt-row { grid-template-columns: 1fr; }
@@ -264,7 +271,8 @@ details.step:not([open]) { opacity: 0.85; }
 .prow b { font: 500 0.85rem/1 var(--mono); text-align: right; }
 .webdiff { margin: 0.2rem 0; font-size: 0.82rem; }
 .facts .sub.chg { color: var(--warn); }
-input.ed { width: 3.3rem; font: 400 0.78rem/1 var(--mono); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; padding: 0.15rem 0.2rem; }
+tr[data-obj] > td:first-child { width: 0; padding: 0; }
+input.ed { width: 2.9rem; font: 400 0.78rem/1 var(--mono); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; padding: 0.15rem 0.2rem; }
 .crit-sheet { margin: 0 0 10px; }
 .crit-sheet img { width: 100%; max-width: 520px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
 .crit-sheet figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -400,7 +408,14 @@ document.addEventListener("click", async (e) => {
     edits[tr.dataset.obj] = { size_cm: [v("s0"), v("s1"), v("s2")], mass_g: v("m"), friction: Number.isFinite(v("f")) ? v("f") : null };
   }
   e.target.disabled = true; $("facts-msg").textContent = "Re-running in the simulator…";
-  try { await tryIt({}, edits); editFacts = false; renderTimeline(); }
+  try {
+    await tryIt({}, edits);
+    const r = state.attempts[state.selected];
+    state.factsNote = `Your test ${state.myTries} used ` + Object.entries(edits).map(([n, x]) =>
+      `${n} ${x.size_cm.map((v) => (+v).toFixed(1)).join("×")} cm, ${Math.round(x.mass_g)} g${x.friction ? `, μ ${x.friction}` : ""}`).join("; ")
+      + ` → ${r && r.success ? "all goals pass" : "goals fail"} (shown in the 3D view; the table above keeps the original facts).`;
+    editFacts = false; renderTimeline();
+  }
   catch (err) { $("facts-msg").textContent = "Could not re-run: " + err.message; e.target.disabled = false; }
 });
 const fmtS = (s) => (s < 10 ? s.toFixed(1) : Math.round(s)) + " s";
@@ -477,7 +492,7 @@ function stepBody(s) {
         ${robot}
         ${state.done && attemptNums().length ? (editable
           ? `<div class="o-actions"><button type="button" class="export-btn primary" id="facts-run">Re-run with these facts</button><button type="button" class="export-btn" id="facts-cancel">Cancel</button><span class="muted" id="facts-msg" style="font-size:.78rem">Physics only, no model call. The plan's skills adapt to the new sizes.</span></div>`
-          : `<button type="button" class="export-btn" id="facts-edit">Edit sizes, masses, friction and re-run</button>`) : ""}
+          : `<button type="button" class="export-btn" id="facts-edit">Edit sizes, masses, friction and re-run</button>${state.factsNote ? `<p class="mono" style="font-size:.74rem">${esc(state.factsNote)}</p>` : ""}`) : ""}
         ${srcs ? `<details class="more"><summary>${(s.sources || []).length} web sources</summary><div class="src" style="margin-top:.4rem">${srcs}</div></details>` : ""}`;
     }
     case "scenecheck": {
@@ -686,7 +701,7 @@ function renderTimeline() {
     let meta = "";
     if (running) meta = fmtS(Math.max(0, (state.end || now) - s.startTs));
     else if (s.stats) meta = `${fmtS(s.stats.latency_s)} · ${s.stats.tokens_in + s.stats.tokens_out} tok · ${fmt$(s.stats.cost_usd)}`;
-    else meta = fmtS(s.doneTs - s.startTs);
+    else meta = fmtS(s.step === "stress" && s.data && s.data.seconds ? s.data.seconds : s.doneTs - s.startTs);
     const name = STEP_NAMES[s.step] || s.step;
     const att = s.attempt ? `<span class="step-attempt">attempt ${s.attempt}</span>` : "";
     const esc8 = s.escalated ? `<span class="pill p-bad">escalated</span>` : "";

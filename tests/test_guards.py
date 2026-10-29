@@ -187,3 +187,14 @@ def test_evidence_must_be_checkable():
     pages = {"http://a": "a standard can is 12.3 cm tall", "http://b": "cans come in many sizes", "http://c": "height 4.84 in"}
     kept = _verified_evidence(e, pages)
     assert [k.source for k in kept] == ["http://a", "http://c"]
+
+
+def test_physics_quote_context():
+    """A friction quote must be about this material on dry wood or a table, not a wet surface or a worked example."""
+    from spec2sim.grounder import context_ok
+    assert context_ok("Metal on wood | 0.5 | 0.3", "metal", "friction")[0]
+    assert not context_ok("Wood on Wet Metal | 0.2", "metal", "friction")[0]
+    assert not context_ok("For this example, the coefficient of cardboard is calculated as 0.3", "cardboard", "friction")[0]
+    assert not context_ok("Glass on glass 0.9", "glass", "friction")[0]
+    assert context_ok("Wood on Wood (Clean) 0.25-0.5", "wood", "friction")[0]
+    assert context_ok("Rubber ball – Concrete 0.85 – 0.95", "rubber", "restitution")[0]
