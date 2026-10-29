@@ -202,7 +202,8 @@ export class SimViewer {
     this.root = new THREE.Group();
     this.scene.add(this.root);
     this.playing = true; this.t = 0; this.speed = 1; this.last = performance.now(); this.style = "realistic"; this.followers = []; this.master = null; this.ghost = null;
-    new ResizeObserver(() => this.#resize()).observe(this.el);
+    this.ro = new ResizeObserver(() => this.#resize());
+    this.ro.observe(this.el);
     this.#resize();
     this.renderer.setAnimationLoop(() => this.#tick());
   }
@@ -410,7 +411,13 @@ export class SimViewer {
     if (!this.onTry || this.busy) return;
     this.busy = true; this.#syncRerun();
     try { await this.onTry({ ...this.moves }); this.stopEdit(); }
-    catch (e) { this.editBar.querySelector("span").textContent = String(e.message || e); }
+    catch (e) {
+      const msg = String(e.message || e);
+      this.editBar.querySelector("span").textContent = /reachable area|out of reach/.test(msg)
+        ? "That spot is outside the robot's reach: drag it closer to the robot and re-run."
+        : /overlap/.test(msg) ? "Two objects would overlap there: move one a little further and re-run."
+        : msg.length > 140 ? msg.slice(0, 140) + "…" : msg;
+    }
     finally { this.busy = false; this.#syncRerun(); }
   }
 
@@ -446,7 +453,11 @@ export class SimViewer {
       }
       if (!ray.ray.intersectPlane(plane, hit)) return;
       const { g, child, off } = this.drag;
-      const nx = hit.x + off.x, ny = hit.y + off.y;
+      // Keep the object's center inside the reachable area the server checks (x 0.30-0.70 m,
+      // |y| <= 0.40 m, <= 0.78 m from the base), with a margin for its footprint.
+      let nx = Math.min(0.66, Math.max(0.34, hit.x + off.x)), ny = Math.min(0.36, Math.max(-0.36, hit.y + off.y));
+      const r = Math.hypot(nx, ny);
+      if (r > 0.74) { nx *= 0.74 / r; ny *= 0.74 / r; }
       if (child) { child.position.x += nx - g.position.x; child.position.y += ny - g.position.y; }
       g.position.x = nx; g.position.y = ny;
       dom.style.cursor = "grabbing";
@@ -595,7 +606,9 @@ export class SimViewer {
     this.unfollow();
     for (const f of this.followers) f.master = null;
     this.renderer.setAnimationLoop(null);
+    this.ro?.disconnect();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();  // browsers cap live WebGL contexts (~8-16); free ours now
   }
 }
 

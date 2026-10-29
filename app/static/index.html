@@ -597,7 +597,12 @@ function renderScreen(r) {
     }
   } else if (r && r.error) {
     disposeViews();
-    screen.innerHTML = `<div class="idle">Nothing to replay: ${esc(r.error)}</div>`;
+    // An attempt whose scene failed validation has nothing to replay: show its first problem plainly.
+    const first = String(r.error).replace(/^\d+ scene problems: /, "").split(" | ")[0];
+    const more = (String(r.error).match(/ \| /g) || []).length;
+    screen.innerHTML = `<div class="feas"><b style="font-size:1.1rem">Attempt ${state.selected}: the scene was invalid, so nothing was simulated</b>
+      <span>${esc(first)}${more ? ` (and ${more} more problem${more > 1 ? "s" : ""})` : ""}</span>
+      <span class="mono" style="font-size:.85rem">The checks caught it before running; the repair fixed it on the next attempt.</span></div>`;
   }
 }
 
@@ -649,8 +654,9 @@ async function tryIt(moves, edits = {}) {
   const d = await r.json();
   if (!r.ok) throw new Error(d.detail || r.statusText);
   if (d.result.error && !d.result.viz_path) throw new Error(d.result.error);
-  state.attempts[TRY + d.try] = d.result;
-  state.selected = TRY + d.try;
+  state.myTries = (state.myTries || 0) + 1;  // number this visitor's own tests 1, 2, 3...
+  state.attempts[TRY + state.myTries] = d.result;
+  state.selected = TRY + state.myTries;
   renderStage();
 }
 
@@ -772,7 +778,7 @@ function renderPolicy() {
 // Outcome bar: the task in big type, and the story of the run in one line.
 function renderOutcome(nums, st) {
   const d = state.done;
-  $("outcome").hidden = !state.start;
+  $("outcome").hidden = !state.start && !state.error;
   $("o-prompt").textContent = state.prompt ? `“${state.prompt}”` : "";
   const secs = state.start ? fmtS((state.end || Date.now() / 1000) - state.start) : "";
   const meta = `<span class="meta"> · ${secs} · ${fmt$(state.cost)}${st ? ` · robust ${st.data.passed}/${st.data.trials}` : ""}</span>`;
@@ -783,7 +789,7 @@ function renderOutcome(nums, st) {
   else if (d.success && nums.length === 1) v = `<span class="ok">✓ Passed on the first try</span>`;
   else if (d.success) v = `<span class="bad">✗ Attempt 1 failed</span> → diagnosed → repaired → <span class="ok">✓ passed on attempt ${nums.length}</span>`;
   else v = `<span class="bad">✗ Still failing after ${nums.length} attempts</span>`;
-  $("o-verdict").innerHTML = v + (d || state.error ? meta : "");
+  $("o-verdict").innerHTML = v + ((d || state.error) && state.start ? meta : "");
 }
 
 // A refused task: the object's width (from the web) against the gripper's opening (datasheet).
@@ -864,6 +870,13 @@ function openStream(runId, retries) {
   });
   source.onerror = () => {
     source.close();
+    if (!state.events.length && retries === 0) {  // nothing ever arrived: is the run there at all?
+      fetch(`/api/runs/${encodeURIComponent(runId)}/events`, { method: "GET" }).then((r) => {
+        if (r.status === 404) { state.error = "run not found: check the link"; clearInterval(ticker); setBusy(false); render(); }
+        else setTimeout(() => openStream(runId, 1), 2000);
+      }).catch(() => setTimeout(() => openStream(runId, 1), 2000));
+      return;
+    }
     if (state.done || state.error || state.runId !== runId && state.runId) { clearInterval(ticker); setBusy(false); return; }
     if (retries >= 5) { state.error = "lost the connection to the server; reload the page to see the result"; clearInterval(ticker); setBusy(false); render(); return; }
     setTimeout(() => { if (!state.done) openStream(runId, retries + 1); }, 2000);
@@ -888,7 +901,11 @@ function follow(runId, live = false) {
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const prompt = $("prompt").value.trim();
-  if (prompt.length < 8) { $("prompt").focus(); return; }
+  if (prompt.length < 8) {
+    $("banner").hidden = false;
+    $("banner").textContent = "Describe the task in a few words first, e.g. “Put the tennis ball into the storage bin”.";
+    $("prompt").focus(); return;
+  }
   setBusy(true);
   try {
     const r = await fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
@@ -896,7 +913,8 @@ $("form").addEventListener("submit", async (e) => {
     follow((await r.json()).run_id, true);
   } catch (err) {
     setBusy(false);
-    $("timeline").innerHTML = `<div class="errbox">Could not start the run: ${esc(err.message)}</div>`;
+    $("banner").hidden = false;  // keep whatever is shown; say why the new run didn't start
+    $("banner").innerHTML = `<b>Could not start a live run:</b> ${esc(err.message)}`;
   }
 });
 $("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });

@@ -322,12 +322,15 @@ class TryRequest(BaseModel):
     edits: dict[str, ObjectEdit] = Field(default_factory=dict, max_length=8)
 
 
-_try_lock = threading.Lock()
-MAX_TRIES = 30  # "your tests" per run
+_try_lock = threading.Lock()   # "your tests": one at a time (CPU work on the web server)
+_data_lock = threading.Lock()  # training-data jobs: one at a time, separate so they don't block tests
+MAX_TRIES_PER_VISITOR = 20     # tests per run per visitor
+MAX_TRIES_PER_RUN = 300        # disk guard for a run shared by every visitor
+_tries: dict[tuple[str, str], int] = {}
 
 
 @app.post("/api/runs/{run_id}/try")
-def try_it(run_id: str, req: TryRequest) -> dict:
+def try_it(run_id: str, req: TryRequest, request: Request) -> dict:
     """'Try to break it': re-run a saved plan with objects moved to new (x, y) spots, or with their
     real-world facts corrected (size, mass, friction). Physics only, no model calls; the plan's steps
     are relative to objects (skills even recompute heights from sizes), so it adapts."""
@@ -366,8 +369,11 @@ def try_it(run_id: str, req: TryRequest) -> dict:
         objs.append(o)
     b = b.model_copy(update={"objects": objs})
     goals = [Goal(**g) for g in task["goals"]]
-    if len(list((RUNS / run_id).glob("try*"))) >= MAX_TRIES:
-        raise HTTPException(429, f"This run already has {MAX_TRIES} tests; open another run to keep trying.")
+    who = (run_id, _client_ip(request))
+    if _tries.get(who, 0) >= MAX_TRIES_PER_VISITOR:
+        raise HTTPException(429, f"You've run {MAX_TRIES_PER_VISITOR} tests on this run; open another run to keep trying.")
+    if len(list((RUNS / run_id).glob("try*"))) >= MAX_TRIES_PER_RUN:
+        raise HTTPException(429, "This run has had a lot of tests today; open another run to keep trying.")
     if not _try_lock.acquire(blocking=False):  # busy: answer at once instead of tying up a server thread
         raise HTTPException(429, "The simulator is busy with another test; try again in a few seconds.")
     try:
@@ -375,6 +381,8 @@ def try_it(run_id: str, req: TryRequest) -> dict:
         r = runner.run(b, goals, RUNS / run_id / f"try{n}", {o.name for o in b.objects}, physics)
     finally:
         _try_lock.release()
+    if r.viz_path:  # only simulated tests count toward the visitor's limit (not rejected scenes)
+        _tries[who] = _tries.get(who, 0) + 1
     return {"try": n, "attempt": req.attempt, "result": _public(r, run_id), "edits": req.model_dump()["edits"]}
 
 
@@ -390,8 +398,12 @@ def make_dataset(run_id: str, req: DatasetRequest) -> dict:
     """Training data from a solved task: N successful perturbed demonstrations in LeRobot v2.1
     layout (parquet + mp4), generated in the background with physics only (no model calls)."""
     job = _datasets.get(run_id)
-    if job and job["state"] == "running":
-        return job
+    if job and job["state"] in ("running", "done"):
+        return job  # never regenerate (and overwrite) a dataset someone may be downloading
+    zips = sorted((RUNS / run_id).glob(f"dataset_{req.episodes}.zip")) if "/" not in run_id else []
+    if zips:
+        return {"state": "done", "done": req.episodes, "total": req.episodes, "tried": None, "error": None,
+                "result": {"zip": str(zips[0].relative_to(RUNS)), "episodes": req.episodes}}
     events = _live[run_id].events if run_id in _live else _saved(run_id)
     if not events:
         raise HTTPException(404, "run not found")
@@ -410,7 +422,7 @@ def make_dataset(run_id: str, req: DatasetRequest) -> dict:
         def progress(k, n, tried):
             job.update(done=k, tried=tried)
         try:
-            with _try_lock:
+            with _data_lock:
                 out = RUNS / run_id / f"dataset_{req.episodes}"
                 facts = _facts(events)
                 res = generate(Build(**builds[ok[-1]]), [Goal(**g) for g in task["goals"]], prompt, out,

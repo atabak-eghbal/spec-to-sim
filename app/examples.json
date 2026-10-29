@@ -68,7 +68,7 @@
       "policy": true
     },
     {
-      "title": "Fruit sorting: bins overlapped, then fixed",
+      "title": "Fruit sorting: invented table rejected, then fixed",
       "prompt": "Put the apple and the lime into the fruit basket, and the soda can into the recycling bin",
       "run_id": "20261028-123520-54e9",
       "category": "fixed"
