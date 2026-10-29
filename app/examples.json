@@ -43,11 +43,18 @@
   ],
   "featured": [
     {
+      "title": "Soda can falls over, 3 repairs tested, fixed",
+      "prompt": "Put the soda can to the left of the Rubik's cube and keep it upright",
+      "run_id": "20261028-223723-fd3c",
+      "category": "fixed",
+      "hero": true,
+      "view": "compare"
+    },
+    {
       "title": "Tennis ball rolls off, then fixed",
       "prompt": "Pick up the tennis ball and place it on the Rubik's cube",
       "run_id": "20261028-151115-e705",
       "category": "fixed",
-      "hero": true,
       "view": "compare"
     },
     {
