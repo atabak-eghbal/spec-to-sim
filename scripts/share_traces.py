@@ -21,7 +21,9 @@ def main() -> None:
     args = ap.parse_args()
     client = None
     if args.apply:
+        from dotenv import load_dotenv
         from langsmith import Client
+        load_dotenv(ROOT / ".env", override=True)  # the project's key wins over any stale one in the shell
         client = Client()
     for f in sorted((ROOT / "app/featured").glob("*/events.jsonl")):
         events = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
