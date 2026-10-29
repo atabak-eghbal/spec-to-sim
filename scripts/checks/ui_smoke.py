@@ -14,7 +14,7 @@ with sync_playwright() as p:
             for i in range(len(pg.query_selector_all(sel))):
                 try:
                     pg.query_selector_all(sel)[i].click(); pg.wait_for_timeout(700)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - report any click failure
                     errs.append(f"{r}: click {sel}: {e}"[:160])
         pg.close()
     b.close()
