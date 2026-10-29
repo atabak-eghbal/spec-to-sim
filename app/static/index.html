@@ -448,8 +448,10 @@ function stepBody(s) {
         <td class="n">${f.size.map(cm).join(" × ")} cm</td><td class="n">${Math.round(f.mass * 1000)} g</td>
         <td>${f.source_url ? `<a href="${esc(safeUrl(f.source_url))}" target="_blank" rel="noopener">source</a> ` : ""}${conf(f)}</td></tr>`;
       }).join("");
-      const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit|not found/.test(f.note || ""))
-        .map((f) => `<li><b>${esc(f.name)}</b>: ${esc(f.note)}</li>`).join("");
+      // Recorded runs carry an older wording of the mass note; say what it means.
+      const plain = (n) => String(n || "").replace(/mass corrected: ([\d.]+) g implies (\d+) kg\/m3/, "web mass $1 g is impossible for this size ($2 kg/m3); mass estimated from the size instead");
+      const checks = d.facts.filter((f) => /rejected|resized|corrected|sized to fit|not found|impossible|median/.test(f.note || ""))
+        .map((f) => `<li><b>${esc(f.name)}</b>: ${esc(plain(f.note))}</li>`).join("");
       const lnk = (u, t) => u ? `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t}</a>` : `<span class="muted">${t === "src" ? "typical" : t}</span>`;
       const phys = (d.materials || []).map((m) => `<tr><td>${esc(m.material)}</td><td class="n">μ ${m.friction} ${lnk(m.friction_source, "src")}</td>
         <td class="n">bounce ${m.restitution} ${lnk(m.restitution_source, "src")}</td></tr>`).join("");
@@ -870,7 +872,7 @@ function openStream(runId, retries) {
 
 function follow(runId, live = false) {
   $("banner").hidden = live;
-  $("banner").innerHTML = `Replaying a recorded run (no model calls). Type your own task above and press Simulate to run it live: about a minute, under a cent.`;
+  $("banner").innerHTML = `Replaying a recorded run (no model calls). Type your own task above and press Simulate to run it live: about a minute, typically under a cent.`;
   if (source) source.close();
   clearInterval(ticker);
   reset();

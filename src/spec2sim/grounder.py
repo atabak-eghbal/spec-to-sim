@@ -233,7 +233,8 @@ def _to_fact(e: _Extracted, shape: str, prior_cm: tuple[float, float, float] | N
                                   note=f"size corrected: web {web_cm} cm doesn't fit its {e.mass_g:g} g weight; "
                                        f"used the size the weight implies")
         mass = round(vol * _DEFAULT_DENSITY, 4)
-        fix = f"mass corrected: {e.mass_g:g} g implies {density:.0f} kg/m3"
+        fix = (f"web mass {e.mass_g:g} g is impossible for this size ({density:.0f} kg/m3); "
+               f"mass estimated from the size instead")
         note = f"{note}; {fix}" if note.startswith("web size") else fix
     return ObjectFact(name=e.name, size=size, mass=mass,
                       source_url=e.source_url if e.quote.strip() else None, note=note)
