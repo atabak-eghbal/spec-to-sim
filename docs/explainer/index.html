@@ -162,9 +162,9 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
   <div class="status">
     <div><span class="label">Deadline</span><b>Fri Oct 30, 10:00 PT</b></div>
     <div><span class="label">Target submit</span><b>08:00 PT</b></div>
-    <div><span class="label">Model spend</span><b>$4.03 / $20 cap</b></div>
-    <div><span class="label">Held-out eval</span><b>41 / 45 (91 %)</b></div>
-    <div><span class="label">Tests</span><b>30 / 30 passing</b></div>
+    <div><span class="label">Model spend</span><b>$4.99 / $20 cap</b></div>
+    <div><span class="label">Held-out eval</span><b>42 / 45 (93 %)</b></div>
+    <div><span class="label">Tests</span><b>36 / 36 passing</b></div>
     <div><span class="label">Repo</span><b>private until submit</b></div>
   </div>
 </header>
@@ -691,6 +691,38 @@ footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--ru
       <div class="dec-body"><dl>
         <dt>Decision</dt><dd>15 new prompts were committed before any was run. 104 runs on one commit: held-out 41/45 (91 %, CI 79–96 %), development 29/33, Critic off 23/26. Ultra fixed 4 of 18 escalated repairs; Super fixed 18 of 28. Weak spots are published.</dd>
         <dt>Why</dt><dd>"11/11" was one run per prompt on the prompts we had debugged against, pieced together after a crash fix. The new numbers are lower to state but can be trusted. They also show the Critic and Ultra have not yet proven their value, which we now say openly.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D46</span><span class="dec-title">Skills, repair history, and the simulator as the judge of repairs</span><span class="dec-area">pipeline</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>The Builder writes skills (pick, place_on, drop_into, push) and code computes the waypoints. Each repair is 3 Super candidates that see every earlier attempt; the simulator tests each in seconds and the best runs. Ultra escalation removed, with your approval.</dd>
+        <dt>Why</dt><dd>A second round of six tougher judges, and our own eval: Ultra fixed 4 of 18 runs. Round 2: held-out 42/45, cost per task $0.013 → $0.009.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D47</span><span class="dec-title">The vision model gets a measurable job, and we report the result</span><span class="dec-area">eval</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Super VL now also checks a render of the scene before the robot moves (advisory). Measured over 77 runs, its warnings did not predict failures, and the Critic still shows no measurable gain. Both stay as visible explanations; the README says they don't improve results.</dd>
+        <dt>Why</dt><dd>Judges noticed our own data contradicted the "AI watches itself" pitch. Saying so beats overclaiming.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D48</span><span class="dec-title">Every export is a policy test; a learned policy takes it</span><span class="dec-area">product</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Exports ship spec2sim_env.py + evaluate.py (MuJoCo + NumPy only) with the stress test's randomization and the same goal checks. A small NumPy MLP ensemble trained on 100 generated demos scores 16/16 on a simple stack, 4/16 on the tennis ball, 2/16 on a 3-step task, against 16/16 for the scripted plan.</dd>
+        <dt>Why</dt><dd>The buyer judge's top ask: a test harness a team can use on Monday, and closing the loop from sentence to data to a policy to a measured weakness.</dd>
+      </dl></div>
+    </details>
+
+    <details class="dec">
+      <summary><span class="dec-id">D49</span><span class="dec-title">Redesign around the story of one run, and video v7</span><span class="dec-area">design · video</span></summary>
+      <div class="dec-body"><dl>
+        <dt>Decision</dt><dd>Outcome bar above the 3D view (the task, a one-line verdict, export buttons); setup steps fold away; failure, diagnosis, repair candidates and pass lead with big headlines; 16 stress tiles; editable sizes/masses/friction; refusals drawn as bars; new hero run on the current pipeline. Video v7: title card, chapter labels, crossfades, no overlapping voices.</dd>
+        <dt>Why</dt><dd>Design judge: "a developer console with no hierarchy". Your review of v5: jump cuts, two voices at once, no title.</dd>
       </dl></div>
     </details>
 
