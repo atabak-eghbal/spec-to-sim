@@ -15,6 +15,17 @@ for k, v in {"MUJOCO_GL": "osmesa", "PYOPENGL_PLATFORM": "osmesa", "SPEC2SIM_SHA
     os.environ.setdefault(k, v)
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
+# Pre-built web facts (material friction/bounciness, Franka limits) are uploaded as kb_physics/
+# because Hugging Face rejects '.cache/' paths; the grounder reads them from .cache/physics/.
+_kb, _cache = ROOT / "kb_physics", ROOT / ".cache" / "physics"
+if _kb.is_dir():
+    import shutil
+
+    _cache.mkdir(parents=True, exist_ok=True)
+    for f in _kb.glob("*.json"):
+        if not (_cache / f.name).exists():
+            shutil.copy2(f, _cache / f.name)
+
 import uvicorn
 
 try:  # only present on ZeroGPU hardware

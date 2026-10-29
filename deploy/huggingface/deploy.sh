@@ -10,8 +10,10 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 if [ "${1:-}" = "--stage-only" ]; then STAGE="${2:?dir}"; mkdir -p "$STAGE"; SPACE=""; else
   SPACE="${1:?usage: deploy.sh <hf-username>/<space-name>}"; STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT; fi
 git -C "$ROOT" archive HEAD | tar -x -C "$STAGE"
-mkdir -p "$STAGE/.cache" "$STAGE/third_party/menagerie"
-cp -R "$ROOT/.cache/physics" "$STAGE/.cache/physics"
+mkdir -p "$STAGE/third_party/menagerie"
+# Hugging Face refuses files under '.cache/': ship the web facts as kb_physics/; space_app.py copies
+# them into .cache/physics/ at start-up, where the grounder reads them.
+cp -R "$ROOT/.cache/physics" "$STAGE/kb_physics"
 cp -R "$ROOT/third_party/menagerie/franka_emika_panda" "$STAGE/third_party/menagerie/"
 cp "$ROOT/deploy/huggingface/space_app.py" "$STAGE/space_app.py"
 # Loose bounds from pyproject.toml (the lockfile's exact pins clash with Gradio's own), except MuJoCo,
