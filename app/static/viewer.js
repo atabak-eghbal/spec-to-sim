@@ -388,12 +388,14 @@ export class SimViewer {
     this.setPlaying(false); this.t = 0; this.#pose(0);
     this.editBar.hidden = false; this.editBtn.textContent = "Cancel";
     this.goalLayer.style.display = "none";
+    if (this.ghostRoot) this.ghostRoot.visible = false;  // the failure ghost would sit on top of what you drag
     this.#syncRerun();
   }
 
   stopEdit() {
     this.editing = false; this.editBar.hidden = true; this.editBtn.textContent = "Move objects";
     this.goalLayer.style.display = "";
+    if (this.ghostRoot) this.ghostRoot.visible = true;
     this.renderer.domElement.style.cursor = "";
   }
 

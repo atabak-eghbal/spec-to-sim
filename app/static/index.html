@@ -540,7 +540,8 @@ function renderScreen(r) {
   }
   const ghostBtn = $("ghost-btn");
   const firstFail = pair ? pair[0] : null;
-  ghostBtn.hidden = !(mode === "3d" && firstFail !== null && state.selected !== firstFail);
+  // The ghost belongs to the recorded story only, not to your own tests (moved objects or edited facts).
+  ghostBtn.hidden = !(mode === "3d" && firstFail !== null && state.selected !== firstFail && state.selected < TRY);
   ghostBtn.setAttribute("aria-pressed", String(ghostOn));
 
   if (mode === "compare") {

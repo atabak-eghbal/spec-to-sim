@@ -22,7 +22,7 @@ HERE = Path(__file__).parent
 CLIPS4 = HERE / "clips7"
 CLIPS4.mkdir(exist_ok=True)
 FRAMES = HERE / "shots"
-TH = "&theater=1&clean=1"
+TH = "&theater=1&clean=1&ghost=0"
 DRAWER2 = "20261028-142918-490a"
 
 
