@@ -270,14 +270,30 @@ def search(query: str, images: bool = True) -> tuple[dict, bool]:
     return res, False
 
 
+AGREE_BAND = 0.08  # two sizes "agree" if their largest dimensions differ by at most 8 %
+
+
 def _agreement(e: _Extracted, fact: ObjectFact) -> tuple[int, int]:
-    """(sources that gave a size, how many of them agree with the chosen size within 20%)."""
+    """(independent evidence sources that gave a size, how many agree with the chosen size within
+    AGREE_BAND). The chosen quote itself is not counted: a source can't vote for itself."""
     sizes = [ev.size_mm for ev in e.evidence if ev.size_mm and max(ev.size_mm) > 0]
-    if e.quote.strip():
-        sizes = [e.size_mm, *sizes]
     chosen = max(fact.size) * 1000
-    agree = sum(1 for sz in sizes if abs(max(sz) - chosen) <= 0.2 * chosen)
+    agree = sum(1 for sz in sizes if abs(max(sz) - chosen) <= AGREE_BAND * chosen)
     return len(sizes), agree
+
+
+def _consensus(e: _Extracted) -> _Extracted:
+    """With three or more sizes from the web, use the median one: a single outlier page (a farm
+    guide's 8.9 cm 'apple') then can't decide whether a task is refused."""
+    sizes = [tuple(e.size_mm)] if e.quote.strip() and max(e.size_mm) > 0 else []
+    sizes += [tuple(ev.size_mm) for ev in e.evidence if ev.size_mm and max(ev.size_mm) > 0]
+    if len(sizes) < 3:
+        return e
+    med = sorted(sizes, key=max)[len(sizes) // 2]
+    if abs(max(med) - max(e.size_mm)) <= AGREE_BAND * max(med):
+        return e
+    return e.model_copy(update={"size_mm": med, "note": f"median of {len(sizes)} web sizes "
+                                f"({sorted(round(max(x) / 10, 1) for x in sizes)} cm)"})
 
 
 def _clamp(v: float, lo_hi: tuple[float, float]) -> tuple[float, bool]:
@@ -406,9 +422,13 @@ def ground(task: TaskSpec) -> tuple[GroundedFacts, list[Source], dict, list[Call
     mats = {o.name: o.material for o in task.objects}
     out = []
     corpus = _norm("\n".join(blocks))
+    returned = {src.url for src in sources}
     for e in ex.facts:
         if e.quote.strip() and not verified(e.quote, corpus):  # invented citation: keep numbers, drop the source
             e = e.model_copy(update={"quote": "", "evidence": [], "note": "estimate (quote not found in sources)"})
+        if e.source_url and e.source_url not in returned:  # a URL Tavily never returned: drop it
+            e = e.model_copy(update={"source_url": None})
+        e = _consensus(e)
         f = _to_fact(e, shapes.get(e.name, "box"), priors.get(e.name), mats.get(e.name))
         checked, agree = _agreement(e, f) if not f.note.startswith("web size") else (0, 0)
         f.sources_checked, f.sources_agree = checked, agree

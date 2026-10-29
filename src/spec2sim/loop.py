@@ -52,12 +52,13 @@ def infeasible(task: TaskSpec, facts: GroundedFacts) -> tuple[str, list[str]] | 
             continue
         sx, sy, _ = f.size
         width = min(sx, sy) if shapes.get(name) == "box" else max(sx, sy)
-        # Refuse only when the evidence agrees: the web size AND the Planner's own typical size are
-        # too wide, or two or more web sources agree on the size. A single odd web number (an orange
+        # Refuse only when the evidence agrees: the Planner's own typical size is too wide as well, or
+        # two or more independent web sources agree (within 8 %) on the too-wide size. A single odd web number (an orange
         # listed at 8.9 cm) is not enough to stop a task; the simulator will test the grasp instead.
         est = next((o.approx_size_cm for o in task.objects if o.name == name), None)
         est_w = (min(est[:2]) if shapes.get(name) == "box" else max(est[:2])) / 100 if est else None
-        confirmed = (est_w is not None and est_w > opening) or f.sources_agree >= 2 or not f.source_url
+        # (A size with no web source is a model's guess: it can't refuse a task on its own.)
+        confirmed = (est_w is not None and est_w > opening) or f.sources_agree >= 2
         if width > opening and confirmed:
             origin = ("size implied by its weight from the web" if f.note.startswith("size corrected")
                       else "size from the web" if f.source_url else "estimated size")
@@ -156,7 +157,8 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
                       data=crit.model_dump())
 
         # Repair: REPAIR_CANDIDATES Super repairs in parallel (different temperatures), each tested in
-        # the simulator physics-only (seconds, no model cost); the best one becomes the next attempt.
+        # the simulator physics-only (seconds, no model cost): nominal run, then a few perturbed
+        # re-runs, so a plan that only works in the exact scene loses to a sturdier one.
         # This replaced escalating to Ultra, which fixed 4 of 18 runs in the Oct 28 eval.
         yield _ev("step", step="repair", status="running", model=config.SUPER.label, attempt=attempt + 1,
                   candidates=config.REPAIR_CANDIDATES)
@@ -174,7 +176,8 @@ def run_task(prompt: str, run_id: str | None = None, max_iterations: int | None 
         if not got:
             raise LLMError(f"all {len(temps)} repair candidates failed: {errors}")
         scores = [runner.quick_score(c, task.goals, allowed, physics) for c in got]
-        best = max(range(len(got)), key=lambda i: (scores[i]["ok"], scores[i]["passed"], -scores[i]["miss_m"]))
+        best = max(range(len(got)), key=lambda i: (scores[i]["ok"], scores[i].get("robust", 0), scores[i]["passed"],
+                                                   -scores[i]["miss_m"]))
         b = got[best]
         total_cost += sum(s.cost_usd for s in stats)
         yield _ev("step", step="repair", status="done", attempt=attempt + 1, stats=_stats(stats),

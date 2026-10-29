@@ -294,9 +294,11 @@ def run(build: Build, goals: list[Goal], out_dir: Path, allowed: set[str] | None
         error = str(e)
     sim.tilt_events()
 
-    results = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
-    video, frames, sheet, viz = sim.rec.save(sim.events, [r.model_dump() for r in results])
-    sim.rec.close()
+    try:
+        results = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
+        video, frames, sheet, viz = sim.rec.save(sim.events, [r.model_dump() for r in results])
+    finally:
+        sim.rec.close()  # release the GL context even if saving fails (long-lived web server)
     return RunResult(
         success=error is None and bool(results) and all(r.ok for r in results),
         goals=results, events=sim.events, error=error,
@@ -424,16 +426,30 @@ def snapshot(build: Build, path: Path, allowed: set[str] | None = None, physics:
     return str(path)
 
 
+ROBUST_TRIALS = 4  # perturbed re-runs per repair candidate when choosing the best one
+
+
 def quick_score(build: Build, goals: list[Goal], allowed: set[str] | None = None,
-                physics: dict | None = None) -> dict:
+                physics: dict | None = None, robust_trials: int = ROBUST_TRIALS) -> dict:
     """Run a plan physics-only (no rendering, no model calls) and score it, to pick the best of
-    several repair candidates: success first, then goals passed, then total miss distance."""
+    several repair candidates: success first, then how many of `robust_trials` perturbed re-runs
+    also pass (a plan that only works in the exact nominal scene is fragile), then goals passed,
+    then total miss distance. Any crash scores as a failed candidate instead of killing the run."""
     try:
         sim = _Sim(build, None, allowed, physics=physics)
+        err = _execute(sim, build)
+        res = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
     except SceneError as e:
-        return {"ok": False, "passed": -1, "miss_m": 9.0, "error": str(e)[:200]}
-    err = _execute(sim, build)
-    res = [check_goal(sim.scene, sim.d, g, sim.ctl.held, sim.peaks) for g in goals]
-    return {"ok": err is None and all(r.ok for r in res), "passed": sum(r.ok for r in res),
+        return {"ok": False, "passed": -1, "robust": 0, "miss_m": 9.0, "error": str(e)[:200]}
+    except Exception as e:  # noqa: BLE001 - one broken candidate must not stop the repair
+        return {"ok": False, "passed": -1, "robust": 0, "miss_m": 9.0, "error": f"crashed: {e!r}"[:200]}
+    ok = err is None and all(r.ok for r in res)
+    robust = 0
+    if ok and robust_trials:
+        try:
+            robust = stress_test(build, goals, trials=robust_trials, seed=7, physics=physics)["passed"]
+        except Exception:  # noqa: BLE001
+            robust = 0
+    return {"ok": ok, "passed": sum(r.ok for r in res), "robust": robust, "robust_trials": robust_trials,
             "miss_m": round(sum(r.error_m for r in res), 4), "error": (err or "")[:200],
             "failed": [r.detail for r in res if not r.ok][:3]}

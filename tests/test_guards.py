@@ -42,7 +42,7 @@ def test_taskspec_rejects_unknown_target():
 
 def test_too_wide_object_is_infeasible_before_building():
     task = _spec([Goal(type="inside", obj="apple", target="basket")])
-    facts = lambda d: GroundedFacts(facts=[ObjectFact(name="apple", size=(d, d, d), mass=0.2),
+    facts = lambda d: GroundedFacts(facts=[ObjectFact(name="apple", size=(d, d, d), mass=0.2, source_url="http://s", sources_agree=2),
                                            ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
     assert "7.8 cm usable" in infeasible(task, facts(0.083))[0]
     assert infeasible(task, facts(0.07)) is None
@@ -50,6 +50,10 @@ def test_too_wide_object_is_infeasible_before_building():
     one = GroundedFacts(facts=[ObjectFact(name="apple", size=(0.083,) * 3, mass=0.2, source_url="http://s", sources_agree=1),
                                ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
     assert infeasible(task, one) is None
+    # A model's guess with no source can't refuse a task on its own either.
+    guess = GroundedFacts(facts=[ObjectFact(name="apple", size=(0.089,) * 3, mass=0.2),
+                                 ObjectFact(name="basket", size=(0.3, 0.2, 0.1), mass=0.3)])
+    assert infeasible(task, guess) is None
 
 
 def test_planner_table_dropped_and_names_checked():

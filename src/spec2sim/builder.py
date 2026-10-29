@@ -95,7 +95,8 @@ You are REPAIRING a plan that failed. You get every earlier attempt with its mea
 (ground truth) and sim events, and a vision critic's reading of the last run's video. Fix the root
 cause with the smallest change that makes every goal pass. Do NOT repeat a scene or plan that
 already failed: if a change did not help before, try a different one. Do not change object sizes or
-masses - they are real-world facts. Explain the fix in `rationale`."""
+masses - they are real-world facts. Remember the frame: +y is the robot's LEFT (left_of = larger y),
++x is away from the robot. Explain the fix in `rationale`."""
 
 
 def _plan_brief(b: Build) -> str:

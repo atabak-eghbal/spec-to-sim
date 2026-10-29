@@ -15,6 +15,10 @@ from spec2sim.schemas import Build, Critique, RunResult, SceneReview, TaskSpec
 SYSTEM = """You are a robotics simulation reviewer. You see a contact sheet of 8 frames (left to
 right, top to bottom, timestamped) from a MuJoCo simulation of a Franka Panda arm, plus the
 measured results, which are ground truth. The run FAILED. Diagnose why.
+FRAME: meters; robot base at the origin; +x points away from the robot (forward), +y is the robot's
+LEFT, +z up. left_of means larger y, right_of smaller y, in_front_of larger x, behind smaller x.
+Express fixes in the plan's own terms: which object or bin, which offset [dx, dy, dz] or push
+direction (+x/-x/+y/-y), never raw joint values.
 
 First look at the frames and describe what they show (where the gripper went, whether the object
 moved with it, where it ended up) before reading the numbers. Then quote the measurements, name the

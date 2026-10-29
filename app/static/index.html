@@ -479,8 +479,8 @@ function stepBody(s) {
         return `<li>${esc(a.op)}</li>`;
       }).join("");
       const c = s.candidates || [];
-      const cands = c.length ? `<p class="headline">Tested ${c.length} repair candidates in the simulator; ran the best</p><div class="cands">${c.map((x, i) =>
-        `<div class="${x.chosen ? "chosen" : ""}">${x.chosen ? "▶" : "·"} candidate ${i + 1}: ${x.ok ? "✓ all goals" : x.passed < 0 ? "✗ invalid scene" : `${x.passed} goal${x.passed === 1 ? "" : "s"} pass`}${x.chosen ? " (chosen)" : ""}</div>`).join("")}</div>` : "";
+      const cands = c.length ? `<p class="headline">Tested ${c.length} repair candidates in the simulator; ran the sturdiest</p><div class="cands">${c.map((x, i) =>
+        `<div class="${x.chosen ? "chosen" : ""}">${x.chosen ? "▶" : "·"} candidate ${i + 1}: ${x.ok ? `✓ all goals${x.robust_trials ? `, ${x.robust}/${x.robust_trials} perturbed re-runs` : ""}` : x.passed < 0 ? "✗ invalid scene" : `${x.passed} goal${x.passed === 1 ? "" : "s"} pass`}${x.chosen ? " (chosen)" : ""}</div>`).join("")}</div>` : "";
       return `${cands}<p>${esc(d.rationale)}</p>
         <details class="more"><summary>${d.objects.length} objects · ${d.plan.actions.length} actions</summary><ol class="actions">${acts}</ol></details>`;
     }
