@@ -43,11 +43,12 @@ itself until the task succeeds. Every step is traced in **LangSmith** and shown 
 | 3 | **Builder**: scene objects (MJCF fragment) + motion plan (waypoint JSON) | Nemotron 3 Super | Structured output |
 | 4 | **Runner**: run MuJoCo headless, render MP4, compute success metrics | Our code (inside Nebius Serverless Endpoint container) | Deterministic |
 | 5 | **Critic**: watch frames + metrics, diagnose failure | **Nemotron 3.5 Super VL** | Image/video understanding |
-| 6 | **Fixer** (only after a failed retry): deep repair | **Nemotron 3 Ultra** | Escalate only when needed → saves credits |
+| 6 | **Repair**: 3 Super candidates, each simulated physics-only, best one runs (Ultra escalation dropped Oct 28 with Austin's approval: it fixed 4/18 in the eval) | **Nemotron 3 Super** | Cheap verifier (the simulator) beats a bigger model |
+| 5b | **Scene check** before the robot moves (advisory, measured) | **Nemotron 3.5 Super VL** | Gives the VLM a job it can be measured on |
 | — | Batch eval of N prompts → success-rate table | **Nebius Serverless Job** | Shows rigor + second Nebius service |
 | — | Tracing | **LangSmith** (`wrap_openai` + `@traceable`) | Architecture visible to judges |
 
-Loop: max **4 iterations**. Attempt 1–2 repaired by Super; attempt 3+ escalates to Ultra.
+Loop: max **4 iterations**. Every repair: 3 Super candidates, best one by physics-only score.
 
 ### Key design decisions (do not change without discussing)
 - **Robots come from MuJoCo Menagerie** (Franka Panda first; UR5e optional). The LLM never writes robot XML — too error-prone.
