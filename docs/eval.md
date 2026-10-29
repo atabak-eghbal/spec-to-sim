@@ -8,7 +8,101 @@ decided only by the code-checked goal predicates (`src/spec2sim/sim/metrics.py`)
 uv run python scripts/eval.py --reps 3 --no-critic-reps 1 --workers 3
 ```
 
-## Final evaluation (Oct 28, 2026, commit `086388b`, local MacBook)
+## Round 2: the current pipeline (Oct 28, 2026, commit `5bb3636`)
+
+After the second judge round the pipeline changed (commit `b367007`): the Builder writes skills
+(`pick`, `place_on`, `drop_into`, `push`) and code computes the waypoints; repairs see every earlier
+attempt; each repair is 3 Super candidates tested in the simulator, best one runs (Ultra escalation
+removed); a vision scene check runs before the robot moves. Same 26 prompts, same method as round 1
+below: 3 runs each plus 1 with the Critic off, 104 runs, `eval/20261028-223102/`.
+
+| Suite | Success | First try | Model cost per task | Stress test (solved tasks) |
+|---|---|---|---|---|
+| Held-out, 15 prompts | **42/45 (93 %, 95 % CI 82–98 %)** | 30/45 (67 %) | median $0.005 | 554/624 (89 %) |
+| Development, 11 prompts | 29/33 (88 %, CI 73–95 %) | 19/33 (58 %) | median $0.006 | 423/464 (91 %) |
+| **All (Critic on)** | **71/78 (91 %, CI 83–96 %)** | 49/78 (63 %) | mean $0.009, median $0.006 | 977/1088 (90 %) |
+
+Compared with round 1: success 70/78 → 71/78 (within noise), mean cost per task $0.013 → $0.009
+(no Ultra), median time per task 47 s → 38 s. First try is lower (53 → 49 of 78), and repairs carry
+more of the load: 26 of 46 repairs fixed the run (57 %), against 22 of 46 in round 1. All 104 runs
+cost $0.94.
+
+**What still fails (7 of 78 with the Critic on):**
+- *Refused as too wide* (4): apples. Two to four web sources agree on 8.1–8.9 cm, and the Franka
+  gripper opens 8 cm, so the refusal follows the evidence. Our held-out prompt assumed an apple
+  fits; the web says many don't.
+- *Knock over* (2): pushing the soda can or the top block over still fails after 4 attempts.
+- *Soda can left of the Rubik's cube* (1): 4 attempts without a pass.
+
+**The vision model, measured twice:**
+- *Critic (after a failure):* with it off, the same prompts succeeded 23/26 (88 %) against 71/78
+  (91 %) with it on. Still no measurable difference.
+- *Scene check (before the robot moves), new:* it flagged 16 of 77 scenes; only 3 of those then
+  failed on attempt 1, and it called 10 scenes ok that then failed. As a predictor of failure it is
+  close to noise. We keep it as a cheap ($0.0004) visible check in the UI, and we don't claim it helps.
+
+**Verdict on the cascade:** the gains came from code (skills, cleaned planner output, oriented web
+sizes) and from using the simulator as a verifier for several cheap Super repairs, not from bigger
+models or from vision. The vision model's value here is explanation for humans.
+
+### Round 2 per-prompt results
+
+| Suite | Critic | Difficulty | Prompt | Runs | Success | First try | Avg attempts | Avg cost | Avg time | Stress (passed/trials) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| dev | on | easy | A Franka arm stacks the red cube on the blue cube | 3 | 3/3 | 3/3 | 1.0 | $0.003 | 30 s | 16/16, 16/16, 16/16 |
+| dev | on | easy | Put the Rubik's cube on top of the soda can | 3 | 3/3 | 3/3 | 1.0 | $0.004 | 31 s | 15/16, 16/16, 16/16 |
+| dev | on | medium | Pick up the tennis ball and place it on the Rubik's cube | 3 | 3/3 | 2/3 | 1.3 | $0.005 | 30 s | 16/16, 16/16, 16/16 |
+| dev | on | medium | Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top | 3 | 3/3 | 2/3 | 1.3 | $0.008 | 50 s | 16/16, 0/16, 16/16 |
+| dev | on | medium | Clear the table: put the red, green and blue toy blocks into the storage bin | 3 | 3/3 | 3/3 | 1.0 | $0.005 | 49 s | 16/16, 16/16, 16/16 |
+| dev | on | hard | Put the apple and the lime into the fruit basket, and the soda can into the recycling bin | 3 | 1/3 | 0/3 | 2.0 | $0.014 | 71 s | 4/16 |
+| dev | on | hard | Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray | 3 | 3/3 | 1/3 | 1.7 | $0.016 | 88 s | 15/16, 15/16, 14/16 |
+| dev | on | hard | Put the soda can to the left of the Rubik's cube and keep it upright | 3 | 2/3 | 1/3 | 2.3 | $0.018 | 59 s | 12/16, 16/16 |
+| dev | on | beyond | Open the drawer, put the Rubik's cube inside, and close it | 3 | 3/3 | 3/3 | 1.0 | $0.007 | 56 s | 16/16, 16/16, 16/16 |
+| dev | on | beyond | Put the tennis ball and the Rubik's cube into the drawer and close it | 3 | 3/3 | 0/3 | 2.3 | $0.029 | 105 s | 15/16, 16/16, 14/16 |
+| dev | on | beyond | Knock over the tower of three wooden toy blocks | 3 | 2/3 | 1/3 | 2.3 | $0.015 | 46 s | 16/16, 15/16 |
+| heldout | on | easy | Put the lime on the red toy block | 3 | 3/3 | 2/3 | 2.0 | $0.014 | 149 s | 7/16, 11/16, 16/16 |
+| heldout | on | easy | Stack the blue block on the green block | 3 | 3/3 | 2/3 | 1.3 | $0.004 | 30 s | 16/16, 16/16, 16/16 |
+| heldout | on | easy | Put the Rubik's cube into the storage bin | 3 | 3/3 | 3/3 | 1.0 | $0.004 | 34 s | 16/16, 16/16, 16/16 |
+| heldout | on | easy | Pick up the tennis ball and drop it into the fruit basket | 3 | 3/3 | 3/3 | 1.0 | $0.004 | 30 s | 16/16, 16/16, 16/16 |
+| heldout | on | medium | Place the apple to the right of the soda can | 3 | 3/3 | 2/3 | 1.3 | $0.008 | 44 s | 16/16, 8/16, 16/16 |
+| heldout | on | medium | Put the red block in front of the blue block | 3 | 3/3 | 0/3 | 2.3 | $0.015 | 150 s | 16/16, 6/16, 15/16 |
+| heldout | on | medium | Put the orange and the apple into the fruit basket | 3 | 1/3 | 1/3 | 1.0 | $0.004 | 595 s | 16/16 |
+| heldout | on | medium | Build a tower of two Rubik's cubes | 3 | 3/3 | 3/3 | 1.0 | $0.004 | 131 s | 16/16, 16/16, 16/16 |
+| heldout | on | medium | Put the wooden block behind the soda can | 3 | 3/3 | 2/3 | 1.3 | $0.007 | 37 s | 12/16, 16/16, 16/16 |
+| heldout | on | hard | Stack the green block on the Rubik's cube, then put the lime to the left of the Rubik's cube | 3 | 3/3 | 2/3 | 1.3 | $0.010 | 572 s | 16/16, 16/16, 5/16 |
+| heldout | on | hard | Sort the toys: the red block goes into the red bin and the blue block into the blue bin | 3 | 3/3 | 3/3 | 1.0 | $0.010 | 601 s | 16/16, 16/16, 16/16 |
+| heldout | on | beyond | Open the drawer | 3 | 3/3 | 1/3 | 1.7 | $0.008 | 514 s | 16/16, 16/16, 16/16 |
+| heldout | on | beyond | Put the tennis ball into the drawer and close it | 3 | 3/3 | 3/3 | 1.0 | $0.007 | 51 s | 16/16, 16/16, 16/16 |
+| heldout | on | beyond | Knock the soda can over | 3 | 2/3 | 0/3 | 3.7 | $0.023 | 57 s | 5/16, 5/16 |
+| heldout | on | refuse | Put the basketball into the storage bin | 3 | 3/3 | 3/3 | 0.0 | $0.001 | 18 s | - |
+| dev | off | easy | A Franka arm stacks the red cube on the blue cube | 1 | 1/1 | 1/1 | 1.0 | $0.003 | 30 s | 16/16 |
+| dev | off | easy | Put the Rubik's cube on top of the soda can | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 26 s | 16/16 |
+| dev | off | medium | Pick up the tennis ball and place it on the Rubik's cube | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 27 s | 16/16 |
+| dev | off | medium | Stack three wooden toy blocks into a tower: red at the bottom, then green, then blue on top | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 42 s | 15/16 |
+| dev | off | medium | Clear the table: put the red, green and blue toy blocks into the storage bin | 1 | 1/1 | 1/1 | 1.0 | $0.006 | 55 s | 16/16 |
+| dev | off | hard | Put the apple and the lime into the fruit basket, and the soda can into the recycling bin | 1 | 0/1 | 0/1 | 0.0 | $0.002 | 17 s | - |
+| dev | off | hard | Tidy up: stack the red block on the blue block, then put the green block and the tennis ball into the tray | 1 | 1/1 | 1/1 | 1.0 | $0.006 | 55 s | 12/16 |
+| dev | off | hard | Put the soda can to the left of the Rubik's cube and keep it upright | 1 | 1/1 | 0/1 | 4.0 | $0.032 | 93 s | 15/16 |
+| dev | off | beyond | Open the drawer, put the Rubik's cube inside, and close it | 1 | 1/1 | 1/1 | 1.0 | $0.008 | 69 s | 16/16 |
+| dev | off | beyond | Put the tennis ball and the Rubik's cube into the drawer and close it | 1 | 1/1 | 0/1 | 4.0 | $0.057 | 171 s | 16/16 |
+| dev | off | beyond | Knock over the tower of three wooden toy blocks | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 37 s | 10/16 |
+| heldout | off | easy | Put the lime on the red toy block | 1 | 1/1 | 1/1 | 1.0 | $0.003 | 22 s | 7/16 |
+| heldout | off | easy | Stack the blue block on the green block | 1 | 1/1 | 1/1 | 1.0 | $0.003 | 32 s | 16/16 |
+| heldout | off | easy | Put the Rubik's cube into the storage bin | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 34 s | 16/16 |
+| heldout | off | easy | Pick up the tennis ball and drop it into the fruit basket | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 36 s | 16/16 |
+| heldout | off | medium | Place the apple to the right of the soda can | 1 | 0/1 | 0/1 | 0.0 | $0.001 | 12 s | - |
+| heldout | off | medium | Put the red block in front of the blue block | 1 | 1/1 | 0/1 | 2.0 | $0.012 | 58 s | 14/16 |
+| heldout | off | medium | Put the orange and the apple into the fruit basket | 1 | 0/1 | 0/1 | 0.0 | $0.002 | 20 s | - |
+| heldout | off | medium | Build a tower of two Rubik's cubes | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 36 s | 16/16 |
+| heldout | off | medium | Put the wooden block behind the soda can | 1 | 1/1 | 1/1 | 1.0 | $0.005 | 39 s | 16/16 |
+| heldout | off | hard | Stack the green block on the Rubik's cube, then put the lime to the left of the Rubik's cube | 1 | 1/1 | 1/1 | 1.0 | $0.006 | 53 s | 16/16 |
+| heldout | off | hard | Sort the toys: the red block goes into the red bin and the blue block into the blue bin | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 45 s | 16/16 |
+| heldout | off | beyond | Open the drawer | 1 | 1/1 | 1/1 | 1.0 | $0.004 | 36 s | 16/16 |
+| heldout | off | beyond | Put the tennis ball into the drawer and close it | 1 | 1/1 | 1/1 | 1.0 | $0.006 | 46 s | 16/16 |
+| heldout | off | beyond | Knock the soda can over | 1 | 1/1 | 0/1 | 2.0 | $0.008 | 33 s | 9/16 |
+| heldout | off | refuse | Put the basketball into the storage bin | 1 | 1/1 | 1/1 | 0.0 | $0.001 | 17 s | - |
+
+## Round 1 (Oct 28, 2026, commit `086388b`, previous pipeline with Ultra escalation)
 
 **Setup.** Two suites, all 104 runs on one commit with no code changes during the run
 (`eval/20261028-210032/`, which also stores the commit hash):
@@ -57,7 +151,7 @@ scored 0/0: every perturbed variant overlapped (crowded scene), so it has no sco
 The simulator's grasp assist (see the README) makes grasping easier than on a real robot, so these
 rates are for "the plan works in this simulator", not for a real Franka.
 
-### Per-prompt results
+### Round 1 per-prompt results
 
 | Suite | Critic | Difficulty | Prompt | Runs | Success | First try | Avg attempts | Avg cost | Avg time | Stress (passed/trials) |
 |---|---|---|---|---|---|---|---|---|---|---|

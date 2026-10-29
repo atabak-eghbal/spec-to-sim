@@ -15,10 +15,10 @@ You type: *"Open the drawer, put the Rubik's cube inside, and close it."*
 
 1. **Plan:** Nemotron 3 Super turns the sentence into a task spec: objects, and success goals that code can check (`inside(rubiks_cube, drawer)`, `closed(drawer)`).
 2. **Ground:** Tavily searches the web for each object's real size and mass, and Nemotron Nano extracts the numbers with their source links. Code converts units and rejects implausible values.
-3. **Build:** Nemotron 3 Super places the objects and writes a motion plan as data (waypoints, gripper open and close). It never writes code or robot XML.
+3. **Build:** Nemotron 3 Super places the objects and writes the plan as skills (`pick`, `place_on`, `drop_into`, `push`; waypoints only for drawers). Code turns skills into waypoints from the real sizes and where things are. The model never writes code or robot XML.
 4. **Simulate:** MuJoCo runs the Franka Panda (from MuJoCo Menagerie) through the plan. **Code checks every goal** against the final simulator state.
-5. **Watch:** if a goal fails, Nemotron 3.5 Super VL looks at 8 frames from the run plus the measured failures, and explains what went wrong and how to fix it.
-6. **Repair:** Super rewrites the plan. If that fails too, the repair **escalates to Nemotron 3 Ultra**. At most 4 attempts.
+5. **Watch:** Nemotron 3.5 Super VL checks a render of the scene before the robot moves, and if a goal fails it looks at 8 frames from the run plus the measured failures and explains what went wrong.
+6. **Repair:** Super writes 3 repair candidates in parallel, seeing every earlier attempt. Each is tested in the simulator (physics only, free) and the best one runs next. At most 4 attempts.
 7. **Stress-test:** a successful plan is re-run 16 times, physics only. Each time every loose object starts up to 4 cm away and turned up to 30°, weighs ±20 % and has ±30 % friction, and the robot sees each object up to 0.5 cm from where it really is (like a camera's error). The result is a robustness score: plans with no margin for error score low.
 8. **Generate training data:** one click turns the solved task into 20 successful demonstrations with varied starts, saved in the **LeRobot v2.1 dataset format** (Parquet + MP4, a format NVIDIA GR00T post-training also reads). The idea follows Isaac Lab Mimic: multiply demonstrations and keep the successful ones. We checked the files load with Hugging Face's `lerobot` (v0.3.3). We have **not** trained a policy on them yet, and the demonstrations come from our scripted top-down controller with the grasp assist (see limitations), so treat them as a starting point, not finished training data.
 
@@ -57,13 +57,13 @@ Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3
 
 | Suite | Success | First try | Model cost per task |
 |---|---|---|---|
-| **15 held-out prompts** (written and committed before any was run) | **41/45 (91 %, 95 % CI 79–96 %)** | 30/45 (67 %) | median $0.005 |
-| 11 development prompts (the ones we built against) | 29/33 (88 %, CI 73–95 %) | 23/33 (70 %) | median $0.006 |
+| **15 held-out prompts** (written and committed before any was run) | **42/45 (93 %, 95 % CI 82–98 %)** | 30/45 (67 %) | median $0.005 |
+| 11 development prompts (the ones we built against) | 29/33 (88 %, CI 73–95 %) | 23/33 → 19/33 | median $0.006 |
 
-- **Weak spots:** pushing a soda can over (1/3), and false "infeasible" refusals when the web gives a wrong size (an orange measured wider than the gripper). Solved fruit-sorting plans score only 5–6/16 on the stress test.
-- **Vision Critic:** turning it off changed nothing measurable (23/26 vs 70/78). We keep it for the readable diagnosis, and we don't claim it improves repairs.
-- **Ultra escalation:** Super's repairs fixed 18 of 28 failed attempts; Ultra's fixed 4 of 18 (on the hardest cases). Not yet worth its cost in this data.
-- Median time per task: 47 s. All 104 runs cost $1.22 of model calls.
+- **What changed it:** the Builder writes skills and code computes the waypoints; each repair is 3 Super candidates tested in the simulator. We dropped escalation to Ultra after the first eval (it fixed 4 of 18 runs): cost per task fell from $0.013 to $0.009 with the same success rate.
+- **Weak spots:** knocking things over (2 of 6 runs fail), and apples refused as too wide: 2–4 web sources agree they are 8.1–8.9 cm, and the gripper opens 8 cm.
+- **Vision model:** turning the Critic off changed nothing measurable (23/26 vs 71/78), and the new pre-run scene check did not predict failures. We keep both for the explanations they show, and we don't claim they improve results.
+- Median time per task: 38 s. All 104 runs cost $0.94 of model calls.
 
 ## How we use NVIDIA Nemotron on Nebius Token Factory
 
@@ -71,10 +71,10 @@ One OpenAI-compatible client and one API key; each pipeline step picks the model
 
 | Step | Model | Why this one |
 |---|---|---|
-| Planner, Builder, first repair | **Nemotron 3 Super** (120B, 12B active) | Reliable strict-schema JSON for multi-step plans at $0.30 / $0.90 per M tokens |
+| Planner, Builder, repair (3 candidates) | **Nemotron 3 Super** (120B, 12B active) | Reliable strict-schema JSON for multi-step plans at $0.30 / $0.90 per M tokens; cheap enough to sample 3 repairs and let the simulator pick |
 | Grounder (fact extraction) | **Nemotron 3 Nano** (30B, 3B active) | Copying numbers and quotes from search results is easy; Nano does it in ~2 s for ~$0.0003 |
-| Critic | **Nemotron 3.5 Super VL** | Reads an 8-frame contact sheet plus the measured failures; with reasoning turned off a critique takes ~3 s |
-| Escalated repair | **Nemotron 3 Ultra** (550B, 55B active) | Only after Super's repair has already failed; deeper reasoning when it is worth paying for |
+| Scene check, Critic | **Nemotron 3.5 Super VL** | Looks at the built scene before the run, and at an 8-frame contact sheet after a failure; with reasoning turned off a call takes ~2–3 s |
+| (tested, then removed) | **Nemotron 3 Ultra** (550B, 55B active) | Escalated repairs fixed 4 of 18 runs in our first eval; 3 Super candidates checked by the simulator did as well for less |
 
 **Where Token Factory accelerated the work:**
 - **Swapping models is a one-word change.** We moved steps between Nano, Super and Ultra just by changing `model=`, so trying another size for a step took minutes.
@@ -116,10 +116,11 @@ flowchart LR
     P --> G[Grounder<br/>Tavily + Nemotron Nano]
     G --> X{Gripper can<br/>hold it?}
     X -->|no| N[Stop: physically infeasible]
-    X -->|yes| B[Builder<br/>Nemotron 3 Super]
-    B --> R[Simulator<br/>MuJoCo + Franka<br/>goals checked in code]
+    X -->|yes| B[Builder<br/>Nemotron 3 Super<br/>skills]
+    B --> V[Scene check<br/>Super VL]
+    V --> R[Simulator<br/>MuJoCo + Franka<br/>goals checked in code]
     R -->|fail| C[Critic<br/>Nemotron 3.5 Super VL]
-    C --> F[Repair<br/>Super, then Ultra]
+    C --> F[Repair<br/>3 Super candidates<br/>best by simulation]
     F --> R
     R -->|pass| S[Stress test<br/>16 perturbed re-runs]
     S --> D[3D replay + export]
