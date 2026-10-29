@@ -5,7 +5,7 @@
 ![Spec-to-Sim: the step timeline on the left, a 3D replay of a Franka arm that has sorted an apple and a lime into a basket and a soda can into a recycling bin on the right, with green goal checks over each object](docs/img/ui.jpg)
 
 **Track:** Physical AI · **Built for:** Nebius x NVIDIA Global AI Hackathon 2026
-**Live demo:** _TBD_ · **Video:** _TBD (YouTube)_
+**Live demo:** https://austintransformer-spec-to-sim.hf.space (Hugging Face Space; recorded runs replay instantly, live runs take about a minute) · **Video:** _TBD (YouTube)_
 
 ---
 
