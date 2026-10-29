@@ -1,6 +1,6 @@
 # Spec-to-Sim
 
-> **Describe a robot task in plain English. Get a working, checked MuJoCo simulation, and watch the AI fix its own mistakes.**
+> **Describe a robot task in plain English. Get a checked MuJoCo simulation, a robustness score and a test harness for your own policy. When a plan fails, Nemotron Super proposes three fixes and the simulator picks the one that works.**
 
 ![Spec-to-Sim: the step timeline on the left, a 3D replay of a Franka arm that has sorted an apple and a lime into a basket and a soda can into a recycling bin on the right, with green goal checks over each object](docs/img/ui.jpg)
 
@@ -71,22 +71,35 @@ Full results and method: [docs/eval.md](docs/eval.md). 104 runs on one commit, 3
 
 ## How we use NVIDIA Nemotron on Nebius Token Factory
 
-One OpenAI-compatible client and one API key; each pipeline step picks the model size it needs:
+One OpenAI-compatible client and one API key; each pipeline step picks the model size it needs.
+
+**The main finding: test-time compute plus a verifier beat a bigger model.** In our first eval, failed attempts were escalated to Nemotron 3 Ultra (550B): it fixed 4 of 18, and its 67 calls were 48 % of all our model spend ($2.38 of $5.00), at a median 32 s and 8,500 output tokens each. We replaced it with three Nemotron Super repairs sampled in parallel, each tested in MuJoCo in seconds, and the best one runs: 26 of 46 repairs fixed the run, and cost per task fell from $0.013 to $0.009 with the same success rate. (The two evals also differ in other code changes, so this is not a controlled A/B.)
+
+| Model | Calls | Median latency | Median output tokens | Spend |
+|---|---|---|---|---|
+| Nemotron 3 Super | 799 | 9.6 s | 1,631 | $2.33 |
+| Nemotron 3 Nano | 333 | 7.1 s | 621 | $0.11 |
+| Nemotron 3.5 Super VL | 214 | 1.9 s | 339 | $0.17 |
+| Nemotron 3 Ultra (removed) | 67 | 32.5 s | 8,506 | $2.38 |
+
+From `.cache/spend.jsonl`, every call made while building and evaluating the project (1,413 calls, $5.00).
+
 
 | Step | Model | Why this one |
 |---|---|---|
 | Planner, Builder, repair (3 candidates) | **Nemotron 3 Super** (120B, 12B active) | Reliable strict-schema JSON for multi-step plans at $0.30 / $0.90 per M tokens; cheap enough to sample 3 repairs and let the simulator pick |
-| Grounder (fact extraction) | **Nemotron 3 Nano** (30B, 3B active) | Copying numbers and quotes from search results is easy; Nano does it in ~2 s for ~$0.0003 |
+| Grounder (fact extraction) | **Nemotron 3 Nano** (30B, 3B active) | Copying numbers and quotes from search results is easy; Nano does it for ~$0.0003 a call (median 7 s, most of it reading long search results) |
 | Scene check, Critic | **Nemotron 3.5 Super VL** | Looks at the built scene before the run, and at an 8-frame contact sheet after a failure; with reasoning turned off a call takes ~2–3 s |
 | (tested, then removed) | **Nemotron 3 Ultra** (550B, 55B active) | Escalated repairs fixed 4 of 18 runs in our first eval; 3 Super candidates checked by the simulator did as well for less |
 
 **Where Token Factory accelerated the work:**
 - **Swapping models is a one-word change.** We moved steps between Nano, Super and Ultra just by changing `model=`, so trying another size for a step took minutes.
+- **Ultra taught us something about strict output:** even with `response_format: json_schema`, Ultra sometimes wrote its reasoning before the JSON, so `llm.py` keeps a small recovery step that takes the last JSON object in the reply.
 - **Strict JSON schema output** (`response_format: json_schema`) made every step return data we can validate with Pydantic and feed back on error.
-- **Turning reasoning off per call** (`chat_template_kwargs.enable_thinking=false`) cut the Critic from ~25 s to ~3 s and stopped it running out of tokens.
-- **Cost is visible per call:** token counts from the API times published prices, logged for every call and shown in the UI. In the evaluation the median task cost $0.006 and the mean $0.013 (a hard failure can reach $0.23). All development, including the 104-run evaluation, cost about $4 of model calls. Prices are list prices as we found them; check them against the Token Factory console.
+- **Turning reasoning off per call** (`chat_template_kwargs.enable_thinking=false`) cut the vision calls from ~25 s to a 1.9 s median and stopped them running out of tokens; planning and repair keep reasoning on.
+- **Cost is visible per call:** token counts from the API times published prices, logged for every call and shown in the UI. In the evaluation the median task cost $0.006 and the mean $0.013 (a hard failure can reach $0.23). All development, including two 104-run evaluations, cost $5.00 of model calls (table above). Prices are list prices as we found them; check them against the Token Factory console.
 
-**Other Nebius services (packaged, not yet deployed):** the app and simulator are one CPU container (`Dockerfile`) meant for a **Nebius Serverless Endpoint**, and `scripts/eval.py` and `scripts/generate_data.py` are written as **Nebius Serverless Job** entrypoints (`deploy/nebius/README.md`). As of Oct 28 our Nebius AI Cloud account could not create registries or endpoints (`PermissionDenied`), so every eval and dataset in this repo ran locally.
+**Other Nebius services (packaged, not yet deployed):** the app and simulator are one CPU container (`Dockerfile`) meant for a **Nebius Serverless Endpoint**, and `scripts/eval.py` and `scripts/generate_data.py` are written as **Nebius Serverless Job** entrypoints (`deploy/nebius/README.md`). As of Oct 28 our Nebius AI Cloud account could not create registries or endpoints (`PermissionDenied`), so every eval and dataset in this repo ran locally, and the public demo runs on a free Hugging Face Space. Token Factory serves every model call in both.
 
 ## How we use Tavily: the reality check
 
